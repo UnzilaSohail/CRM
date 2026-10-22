@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { negativeDeviation } from '../src/index';
+import { classifyDeviation, negativeDeviation } from '../src/index';
 
 describe('negativeDeviation', () => {
   it('planned 80 / actual 40 is 50 (UAT scenario 3)', () => {
@@ -23,5 +23,28 @@ describe('negativeDeviation', () => {
 
   it('is 100 when nothing is done against a positive plan', () => {
     expect(negativeDeviation(60, 0)).toBe(100);
+  });
+});
+
+describe('classifyDeviation', () => {
+  it.each([
+    [null, 'none'],
+    [Number.NaN, 'none'],
+    [0, 'dashboard'],
+    [24.99, 'dashboard'],
+    [25, 'watch'],
+    [49.99, 'watch'],
+    [50, 'critical'],
+    [100, 'critical'],
+  ] as const)('%s -> %s', (value, level) => {
+    expect(classifyDeviation(value)).toBe(level);
+  });
+
+  it('plan 80 / actual 40 is critical end to end', () => {
+    expect(classifyDeviation(negativeDeviation(80, 40))).toBe('critical');
+  });
+
+  it('a zero baseline never raises an alert', () => {
+    expect(classifyDeviation(negativeDeviation(0, 0))).toBe('none');
   });
 });
