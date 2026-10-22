@@ -3,6 +3,9 @@ dist
 .next
 coverage
 .turbo
+test-results
+playwright-report
+*.tsbuildinfo
 .env
 .env.*
 !.env.example
