@@ -1,21 +1,20 @@
-export type Severity = "none" | "warning" | "critical";
+/** none: dashboard only (<25). watch: employee notification (25-49). critical: employee + manager (>=50). */
+export type Severity = "none" | "watch" | "critical";
 
 export interface DeviationThresholds {
-  /** Attainment (actual / planned) below this raises a warning. */
-  warning: number;
-  /** Attainment below this raises a critical alert. */
+  /** Negative deviation (percent) at or above which a watch is raised. */
+  watch: number;
+  /** Negative deviation (percent) at or above which a critical alert is raised. */
   critical: number;
 }
 
-export const DEFAULT_THRESHOLDS: DeviationThresholds = { warning: 0.8, critical: 0.5 };
+export const DEFAULT_THRESHOLDS: DeviationThresholds = { watch: 25, critical: 50 };
 
 export interface Deviation {
   planned: number;
   actual: number;
-  /** actual / planned; null when nothing was planned (zero baseline). */
-  attainment: number | null;
-  /** planned - actual in percentage points, never negative. */
-  gap: number;
+  /** max(0, (planned - actual) / planned) * 100; 0 when planned <= 0. */
+  negativeDeviation: number;
   severity: Severity;
 }
 
@@ -24,12 +23,11 @@ export function computeDeviation(
   actual: number,
   thresholds: DeviationThresholds = DEFAULT_THRESHOLDS,
 ): Deviation {
-  const gap = Math.max(0, planned - actual);
-  if (planned <= 0) return { planned, actual, attainment: null, gap, severity: "none" };
-  const attainment = actual / planned;
+  if (planned <= 0) return { planned, actual, negativeDeviation: 0, severity: "none" };
+  const negativeDeviation = Math.max(0, (planned - actual) / planned) * 100;
   const severity: Severity =
-    attainment < thresholds.critical ? "critical" : attainment < thresholds.warning ? "warning" : "none";
-  return { planned, actual, attainment, gap, severity };
+    negativeDeviation >= thresholds.critical ? "critical" : negativeDeviation >= thresholds.watch ? "watch" : "none";
+  return { planned, actual, negativeDeviation, severity };
 }
 
 export interface AlertKeyInput {

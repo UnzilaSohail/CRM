@@ -24,20 +24,24 @@ describe("progress", () => {
 });
 
 describe("deviation", () => {
-  it("80% planned vs 40% actual sits on the critical boundary (warning)", () => {
+  it("UAT: planned 80, actual 40 is 50% negative deviation and critical", () => {
     const d = computeDeviation(80, 40);
-    expect(d.attainment).toBe(0.5);
-    expect(d.severity).toBe("warning");
+    expect(d.negativeDeviation).toBe(50);
+    expect(d.severity).toBe("critical");
   });
-  it("below 50% attainment is critical", () => expect(computeDeviation(80, 39).severity).toBe("critical"));
+  it("25-49% is watch", () => {
+    expect(computeDeviation(100, 75).severity).toBe("watch");
+    expect(computeDeviation(100, 51).severity).toBe("watch");
+  });
+  it("below 25% is dashboard only", () => expect(computeDeviation(100, 76).severity).toBe("none"));
   it("zero baseline never alerts", () => {
     const d = computeDeviation(0, 0);
-    expect(d.attainment).toBeNull();
+    expect(d.negativeDeviation).toBe(0);
     expect(d.severity).toBe("none");
   });
-  it("ahead of plan has no gap", () => expect(computeDeviation(40, 60).gap).toBe(0));
+  it("ahead of plan has zero deviation", () => expect(computeDeviation(40, 60).negativeDeviation).toBe(0));
   it("dedupes repeated breaches", () => {
-    const k = alertKey({ subjectId: "p1", baselineVersion: 2, severity: "warning", period: "2026-W43" });
+    const k = alertKey({ subjectId: "p1", baselineVersion: 2, severity: "watch", period: "2026-W43" });
     const raised = new Set<string>();
     expect(shouldRaise(k, raised)).toBe(true);
     raised.add(k);

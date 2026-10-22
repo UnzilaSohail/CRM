@@ -12,9 +12,11 @@ datasource db {
 
 enum RoleKey {
   CEO
-  MANAGER
+  SUPER_ADMIN
+  PROJECT_MANAGER
+  TEAM_LEAD
   EMPLOYEE
-  CLIENT
+  CUSTOMER
 }
 
 enum ProjectStatus {
@@ -33,7 +35,7 @@ enum TaskStatus {
 }
 
 enum AlertSeverity {
-  WARNING
+  WATCH
   CRITICAL
 }
 
@@ -76,7 +78,7 @@ model User {
   active    Boolean  @default(true)
   // Pay/cost fields are stripped by serializers for every role except CEO.
   hourlyCost Decimal? @db.Decimal(10, 2)
-  /// Set for CLIENT users: the customer whose portal they may see.
+  /// Set for CUSTOMER users: the customer whose portal they may see.
   customerId String?  @db.Uuid
   createdAt DateTime @default(now())
 
