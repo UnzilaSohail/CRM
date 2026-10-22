@@ -1,0 +1,23 @@
+{
+  "name": "@crm/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@crm/kpi-engine": "workspace:*",
+    "bullmq": "^5.25.0",
+    "ioredis": "^5.4.1"
+  },
+  "devDependencies": {
+    "@crm/tsconfig": "workspace:*",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
