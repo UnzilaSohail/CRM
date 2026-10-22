@@ -89,3 +89,21 @@ Azure only if clients require it or the team is Microsoft-centric.
 ## 8. Next Step
 
 After decisions: scaffold the monorepo in `d:\smsTechnologies\CRM` (Turborepo, Next.js app, API, Prisma schema for all core entities, design tokens, `kpi-engine` package with tests). Optionally write the ERD and KPI dictionary first for review.
+
+## 9. Build Status (updated 2026-10-22)
+
+Defaults from `docs/decisions/0001-default-decisions.md` are in use until the week-1 decisions are answered.
+
+| Area | State |
+|---|---|
+| Monorepo, CI, docker-compose | Done |
+| `kpi-engine` (progress, deviation per spec formula, dedupe keys, time zones) | Done, tested |
+| `types` (permission matrix), `validators` (zod) | Done, tested |
+| Prisma schema, initial migration, RLS + append-only + partial/search indexes | Done, verified on in-process Postgres |
+| Worker: snapshot builder, deviation engine, notification retries, BullMQ queues | Logic done and tested; processors not yet attached to the database |
+| API: deny-by-default roles, projects, portal (separate DTOs), deviations + acknowledge, audit | Done on in-memory data; authorization matrix test (62 cases) passes |
+| Web: UX01-UX16 screens, responsive, PWA manifest, offline page, security headers | Done on sample data |
+| Docs: KPI dictionary (draft), ERD, permission matrix, local runbook | Done |
+| Real auth (MFA, invites, sessions), Prisma data access, web-to-API wiring | Next |
+| WebSocket chat, file uploads + scanning, exports, email/push notifications | Not started |
+| Observability, Terraform, load tests (k6), Playwright UAT, axe | Not started |

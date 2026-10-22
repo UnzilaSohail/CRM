@@ -1,0 +1,11 @@
+{
+  "name": "AiNetworks CRM",
+  "short_name": "AiNetworks",
+  "start_url": "/my-day",
+  "display": "standalone",
+  "background_color": "#F5F7FB",
+  "theme_color": "#0C2752",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

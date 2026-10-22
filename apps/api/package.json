@@ -2,12 +2,15 @@
   "name": "@crm/api",
   "version": "0.0.0",
   "private": true,
-  "engines": { "node": ">=22.12" },
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "start": "node dist/main.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm build && node --test \"tests/*.test.mjs\""
   },
   "dependencies": {
     "@crm/kpi-engine": "workspace:*",
@@ -15,7 +18,9 @@
     "@nestjs/core": "^10.4.0",
     "@nestjs/platform-fastify": "^10.4.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "@crm/types": "workspace:*",
+    "@crm/validators": "workspace:*"
   },
   "devDependencies": {
     "@crm/tsconfig": "workspace:*",
