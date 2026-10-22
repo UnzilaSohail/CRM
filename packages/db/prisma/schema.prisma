@@ -1,0 +1,384 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Every tenant-owned table carries tenant_id and a leading (tenant_id, ...) index.
+// Row-Level Security policies are added in a hand-written migration (see docs/decisions/0002-rls.md).
+
+enum RoleKey {
+  CEO
+  MANAGER
+  EMPLOYEE
+  CLIENT
+}
+
+enum ProjectStatus {
+  PLANNED
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum AlertSeverity {
+  WARNING
+  CRITICAL
+}
+
+enum AlertState {
+  OPEN
+  ACKNOWLEDGED
+  ESCALATED
+  RESOLVED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum SnapshotPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+model Tenant {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  timeZone  String   @default("UTC")
+  createdAt DateTime @default(now())
+
+  users     User[]
+  customers Customer[]
+  projects  Project[]
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  email     String
+  name      String
+  role      RoleKey
+  active    Boolean  @default(true)
+  // Pay/cost fields are stripped by serializers for every role except CEO.
+  hourlyCost Decimal? @db.Decimal(10, 2)
+  /// Set for CLIENT users: the customer whose portal they may see.
+  customerId String?  @db.Uuid
+  createdAt DateTime @default(now())
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id])
+  customer     Customer?    @relation(fields: [customerId], references: [id])
+  assignments  Assignment[]
+  attendance   Attendance[]
+  timeEntries  TimeEntry[]
+  dailyUpdates DailyActivity[]
+  messages     ChatMessage[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId, role])
+}
+
+model Customer {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  name      String
+  /// Normalised name used with pg_trgm for duplicate detection.
+  nameKey   String
+  createdAt DateTime @default(now())
+  deletedAt DateTime?
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  contacts Contact[]
+  projects Project[]
+  users    User[]
+
+  @@index([tenantId, nameKey])
+}
+
+model Contact {
+  id         String  @id @default(uuid()) @db.Uuid
+  tenantId   String  @db.Uuid
+  customerId String  @db.Uuid
+  name       String
+  email      String?
+  phone      String?
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([tenantId, customerId])
+}
+
+model Project {
+  id         String        @id @default(uuid()) @db.Uuid
+  tenantId   String        @db.Uuid
+  customerId String        @db.Uuid
+  name       String
+  status     ProjectStatus @default(PLANNED)
+  startDate  DateTime      @db.Date
+  endDate    DateTime      @db.Date
+  /// Currently active baseline; baselines themselves are immutable.
+  baselineVersion Int      @default(1)
+  createdAt  DateTime      @default(now())
+
+  tenant      Tenant        @relation(fields: [tenantId], references: [id])
+  customer    Customer      @relation(fields: [customerId], references: [id])
+  milestones  Milestone[]
+  tasks       Task[]
+  baselines   Baseline[]
+  messages    ChatMessage[]
+  documents   Document[]
+  approvals   Approval[]
+  snapshots   KpiSnapshot[]
+  alerts      Alert[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, customerId])
+}
+
+/// Immutable, versioned copy of the plan. Never updated, only appended.
+model Baseline {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  projectId String   @db.Uuid
+  version   Int
+  /// Frozen milestones: [{ id, weight, plannedStart, plannedEnd }]
+  payload   Json
+  createdAt DateTime @default(now())
+  createdBy String   @db.Uuid
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@unique([projectId, version])
+  @@index([tenantId, projectId])
+}
+
+model Milestone {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @db.Uuid
+  projectId       String   @db.Uuid
+  name            String
+  weight          Decimal  @db.Decimal(6, 2)
+  percentComplete Decimal  @default(0) @db.Decimal(5, 2)
+  plannedStart    DateTime @db.Date
+  plannedEnd      DateTime @db.Date
+  clientVisible   Boolean  @default(false)
+
+  project Project @relation(fields: [projectId], references: [id])
+  tasks   Task[]
+
+  @@index([tenantId, projectId])
+}
+
+model Task {
+  id            String     @id @default(uuid()) @db.Uuid
+  tenantId      String     @db.Uuid
+  projectId     String     @db.Uuid
+  milestoneId   String?    @db.Uuid
+  title         String
+  status        TaskStatus @default(OPEN)
+  dueDate       DateTime?  @db.Date
+  position      Int        @default(0)
+  clientVisible Boolean    @default(false)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  project     Project      @relation(fields: [projectId], references: [id])
+  milestone   Milestone?   @relation(fields: [milestoneId], references: [id])
+  assignments Assignment[]
+  timeEntries TimeEntry[]
+
+  @@index([tenantId, projectId, status])
+  // Open-task partial index is added in a raw SQL migration: WHERE status IN ('OPEN','IN_PROGRESS')
+}
+
+model Assignment {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  taskId   String @db.Uuid
+  userId   String @db.Uuid
+
+  task Task @relation(fields: [taskId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([taskId, userId])
+  @@index([tenantId, userId])
+}
+
+model Attendance {
+  id       String    @id @default(uuid()) @db.Uuid
+  tenantId String    @db.Uuid
+  userId   String    @db.Uuid
+  day      DateTime  @db.Date
+  checkIn  DateTime
+  checkOut DateTime?
+  // Geolocation capture is policy-gated (open decision); columns stay null until enabled.
+  lat      Float?
+  lng      Float?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, day])
+  @@index([tenantId, day])
+}
+
+model TimeEntry {
+  id       String   @id @default(uuid()) @db.Uuid
+  tenantId String   @db.Uuid
+  userId   String   @db.Uuid
+  taskId   String   @db.Uuid
+  day      DateTime @db.Date
+  minutes  Int
+  note     String?
+
+  user User @relation(fields: [userId], references: [id])
+  task Task @relation(fields: [taskId], references: [id])
+
+  @@index([tenantId, userId, day])
+  @@index([tenantId, taskId])
+}
+
+model DailyActivity {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  userId    String   @db.Uuid
+  day       DateTime @db.Date
+  summary   String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, day])
+  @@index([tenantId, day])
+}
+
+model KpiSnapshot {
+  id              String         @id @default(uuid()) @db.Uuid
+  tenantId        String         @db.Uuid
+  projectId       String         @db.Uuid
+  period          SnapshotPeriod
+  /// Period start in the tenant time zone (yyyy-mm-dd).
+  periodStart     DateTime       @db.Date
+  timeZone        String
+  baselineVersion Int
+  planned         Decimal        @db.Decimal(6, 3)
+  actual          Decimal        @db.Decimal(6, 3)
+  overdueTasks    Int
+  completionRate  Decimal?       @db.Decimal(6, 5)
+  createdAt       DateTime       @default(now())
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@unique([projectId, period, periodStart, baselineVersion])
+  @@index([tenantId, period, periodStart])
+}
+
+model Alert {
+  id              String        @id @default(uuid()) @db.Uuid
+  tenantId        String        @db.Uuid
+  projectId       String        @db.Uuid
+  severity        AlertSeverity
+  state           AlertState    @default(OPEN)
+  /// (subject, baseline_version, threshold, period) — see kpi-engine alertKey().
+  dedupeKey       String
+  baselineVersion Int
+  message         String
+  createdAt       DateTime      @default(now())
+  resolvedAt      DateTime?
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@unique([tenantId, dedupeKey])
+  @@index([tenantId, state])
+}
+
+model Approval {
+  id          String         @id @default(uuid()) @db.Uuid
+  tenantId    String         @db.Uuid
+  projectId   String         @db.Uuid
+  subjectType String
+  subjectId   String         @db.Uuid
+  status      ApprovalStatus @default(PENDING)
+  requestedBy String         @db.Uuid
+  decidedBy   String?        @db.Uuid
+  decidedAt   DateTime?
+  createdAt   DateTime       @default(now())
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@index([tenantId, status])
+}
+
+model Document {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @db.Uuid
+  projectId     String   @db.Uuid
+  name          String
+  storageKey    String
+  mimeType      String
+  sizeBytes     Int
+  /// PENDING until the ClamAV scan clears it.
+  scanState     String   @default("PENDING")
+  clientVisible Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@index([tenantId, projectId])
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  projectId String   @db.Uuid
+  authorId  String   @db.Uuid
+  body      String
+  /// Internal messages are never returned by the portal module.
+  internal  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id])
+  author  User    @relation(fields: [authorId], references: [id])
+
+  @@index([tenantId, projectId, createdAt])
+}
+
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @db.Uuid
+  userId    String    @db.Uuid
+  kind      String
+  payload   Json
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([tenantId, userId, readAt])
+}
+
+/// Append-only. The application role has INSERT/SELECT only; no UPDATE or DELETE grants.
+model AuditEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @db.Uuid
+  actorId    String?  @db.Uuid
+  action     String
+  entityType String
+  entityId   String
+  diff       Json?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, createdAt])
+}

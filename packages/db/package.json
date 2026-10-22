@@ -1,0 +1,17 @@
+{
+  "name": "@crm/db",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "generate": "prisma generate",
+    "migrate": "prisma migrate dev",
+    "validate": "prisma validate",
+    "typecheck": "prisma validate"
+  },
+  "devDependencies": {
+    "prisma": "^6.0.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.0.0"
+  }
+}
