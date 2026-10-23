@@ -78,15 +78,73 @@ const endpoints = () => [
   ['GET', '/attendance/today', WORKERS],
   ['POST', '/attendance/check-in', WORKERS],
   ['POST', '/attendance/check-out', WORKERS],
+  ['POST', '/time-entries', WORKERS, { taskId: DEMO.tasks.rotateKeys, minutes: 5 }],
+  ['GET', '/time-entries', WORKERS],
   ['GET', '/deviations', MANAGE],
   ['POST', `/deviations/${DEMO.projects.etl}/acknowledge`, MANAGE, { severity: 'watch' }],
   ['GET', '/audit', ['CEO', 'SUPER_ADMIN']],
   ['POST', '/auth/mfa/enroll', INTERNAL],
+  ['POST', '/auth/mfa/confirm', INTERNAL, { enrollmentToken: 'not-a-real-token', code: '000000' }],
 ];
+
+// Allowed roles are expected to get past the guard, but these answer 401 by design for bad input.
+const REACH_EXEMPT = new Set(['POST /auth/mfa/confirm']);
+
+// Route table straight from the controllers' decorators, so a new endpoint cannot ship untested.
+const { AppModule } = require('../dist/app.module');
+const { RequestMethod } = require('@nestjs/common');
+const segment = (s) =>
+  s.startsWith(':') || /^[0-9a-f-]{36}$/.test(s) || s === 'undefined' ? ':p' : s;
+const routeKey = (method, path) =>
+  `${method} /${path.split('/').filter(Boolean).map(segment).join('/')}`;
+
+function declaredRoutes() {
+  const routes = [];
+  for (const Controller of Reflect.getMetadata('controllers', AppModule)) {
+    const base = Reflect.getMetadata('path', Controller) ?? '/';
+    for (const name of Object.getOwnPropertyNames(Controller.prototype)) {
+      const handler = Controller.prototype[name];
+      const verb =
+        typeof handler === 'function' ? Reflect.getMetadata('method', handler) : undefined;
+      if (verb === undefined) continue;
+      const path = `${base}/${Reflect.getMetadata('path', handler) ?? ''}`;
+      const isPublic = Boolean(
+        Reflect.getMetadata('public', handler) ?? Reflect.getMetadata('public', Controller),
+      );
+      routes.push({ key: routeKey(RequestMethod[verb], path), isPublic });
+    }
+  }
+  return routes;
+}
 
 describe('health is public', () => {
   it('GET /health without credentials', async () =>
     assert.equal((await call('GET', '/health')).statusCode, 200));
+});
+
+describe('route coverage', () => {
+  const declared = declaredRoutes();
+  const covered = new Set(endpoints().map(([method, url]) => routeKey(method, url)));
+
+  it('finds the routes (guards the guard)', () => {
+    assert.ok(declared.length >= 25, `only ${declared.length} routes found`);
+  });
+
+  it('every protected route has a row in the authorization matrix', () => {
+    const missing = declared.filter((r) => !r.isPublic && !covered.has(r.key)).map((r) => r.key);
+    assert.deepEqual(missing, [], `add these to endpoints(): ${missing.join(', ')}`);
+  });
+
+  it('every matrix row is a real route (no typos)', () => {
+    const real = new Set(declared.map((r) => r.key));
+    const unknown = [...covered].filter((k) => !real.has(k));
+    assert.deepEqual(unknown, []);
+  });
+
+  it('public routes are exactly health and login', () => {
+    const open = declared.filter((r) => r.isPublic).map((r) => r.key);
+    assert.deepEqual(open.sort(), ['GET /health', 'POST /auth/login']);
+  });
 });
 
 describe('authorization matrix', () => {
@@ -671,9 +729,137 @@ describe('attendance', () => {
   });
 });
 
+describe('time entries', () => {
+  const T = DEMO.tasks;
+  const log = (token, payload) => call('POST', '/time-entries', token, payload);
+  const mine = (token, query = '') => call('GET', `/time-entries${query}`, token);
+
+  it('an employee logs time on a task assigned to them', async () => {
+    const res = await log(tokens.EMPLOYEE, {
+      taskId: T.rotateKeys,
+      minutes: 90,
+      note: 'Key rotation script',
+    });
+    assert.equal(res.statusCode, 201, res.body);
+    const entry = json(res);
+    assert.equal(entry.day, '2026-10-22', 'defaults to today in the tenant time zone');
+    assert.equal(entry.minutes, 90);
+    assert.equal(entry.userId, DEMO.users.EMPLOYEE);
+  });
+
+  it('lists only my entries, with a total', async () => {
+    const res = json(await mine(tokens.EMPLOYEE));
+    assert.equal(res.items.length, 1);
+    assert.equal(res.totalMinutes, 90);
+    assert.equal(res.to, '2026-10-22');
+    assert.equal(res.from, '2026-09-22');
+    assert.equal(json(await mine(tokens.PROJECT_MANAGER)).items.length, 0);
+  });
+
+  it('cannot log time on a task that is not assigned to you (404)', async () => {
+    assert.equal(
+      (await log(tokens.EMPLOYEE, { taskId: T.settlementSpec, minutes: 30 })).statusCode,
+      404,
+    );
+    assert.equal((await log(tokens.EMPLOYEE, { taskId: T.loadTest, minutes: 30 })).statusCode, 404);
+  });
+
+  it('validates minutes, dates and ids', async () => {
+    const bad = (payload) =>
+      log(tokens.EMPLOYEE, { taskId: T.rotateKeys, minutes: 30, ...payload });
+    for (const payload of [
+      { minutes: 0 },
+      { minutes: -5 },
+      { minutes: 1.5 },
+      { minutes: 1441 },
+      { minutes: '30' },
+      { day: '2026-02-30' },
+      { note: 'x'.repeat(501) },
+      { taskId: 'nope' },
+    ])
+      assert.equal((await bad(payload)).statusCode, 400, JSON.stringify(payload));
+  });
+
+  it('rejects a future day but accepts earlier days', async () => {
+    const future = await log(tokens.EMPLOYEE, {
+      taskId: T.rotateKeys,
+      minutes: 30,
+      day: '2026-10-23',
+    });
+    assert.equal(future.statusCode, 400);
+    const past = await log(tokens.EMPLOYEE, {
+      taskId: T.rotateKeys,
+      minutes: 45,
+      day: '2026-10-20',
+    });
+    assert.equal(past.statusCode, 201, past.body);
+    const range = json(await mine(tokens.EMPLOYEE, '?from=2026-10-21&to=2026-10-22'));
+    assert.equal(range.items.length, 1, 'the 20th is outside the range');
+  });
+
+  it('caps a day at 24 hours', async () => {
+    // 90 minutes already logged today
+    const over = await log(tokens.EMPLOYEE, { taskId: T.rotateKeys, minutes: 1351 });
+    assert.equal(over.statusCode, 409);
+    const exact = await log(tokens.EMPLOYEE, { taskId: T.rotateKeys, minutes: 1350 });
+    assert.equal(exact.statusCode, 201, exact.body);
+    assert.equal(
+      (await log(tokens.EMPLOYEE, { taskId: T.rotateKeys, minutes: 1 })).statusCode,
+      409,
+    );
+  });
+
+  it('cannot log time on a cancelled task', async () => {
+    await db.prisma.task.update({ where: { id: T.backfill }, data: { status: 'CANCELLED' } });
+    assert.equal((await log(tokens.EMPLOYEE, { taskId: T.backfill, minutes: 10 })).statusCode, 400);
+    await db.prisma.task.update({ where: { id: T.backfill }, data: { status: 'OPEN' } });
+  });
+
+  it('employees cannot read a colleague; leads and managers can', async () => {
+    const other = `?userId=${DEMO.users.EMPLOYEE}`;
+    assert.equal((await mine(tokens.EMPLOYEE, `?userId=${DEMO.users.CEO}`)).statusCode, 403);
+    assert.equal(
+      (await mine(tokens.EMPLOYEE, other)).statusCode,
+      200,
+      'asking for yourself is fine',
+    );
+    for (const role of ['TEAM_LEAD', 'PROJECT_MANAGER', 'CEO']) {
+      const res = await mine(tokens[role], other);
+      assert.equal(res.statusCode, 200, role);
+      assert.ok(json(res).items.length >= 1);
+    }
+  });
+
+  it("never shows another tenant's time, and never exposes cost", async () => {
+    const foreign = await db.prisma.user.create({
+      data: {
+        tenantId: DEMO.otherTenant,
+        email: 'foreign.worker@other.test',
+        name: 'Foreign Worker',
+        role: 'EMPLOYEE',
+      },
+    });
+    const res = await mine(tokens.CEO, `?userId=${foreign.id}`);
+    assert.deepEqual(json(res).items, []);
+    const own = await mine(tokens.CEO);
+    for (const leak of ['hourlyCost', 'passwordHash', 'email'])
+      assert.ok(!own.body.includes(leak), `leaked ${leak}`);
+  });
+
+  it('rejects a reversed range', async () => {
+    assert.equal((await mine(tokens.EMPLOYEE, '?from=2026-10-22&to=2026-10-01')).statusCode, 400);
+  });
+
+  it('audits time logging', async () => {
+    const actions = json(await call('GET', '/audit', tokens.CEO)).map((a) => a.action);
+    assert.ok(actions.includes('time.log'));
+  });
+});
+
 describe('allowed roles reach every handler', () => {
   for (const [method, url, allowed, body] of endpoints()) {
     for (const role of allowed) {
+      if (REACH_EXEMPT.has(`${method} ${url}`)) continue;
       it(`${method} ${url.replace(/[0-9a-f-]{36}/g, ':id')}: ${role} is not blocked`, async () => {
         const res = await call(method, url, tokens[role], body);
         assert.ok(![401, 403].includes(res.statusCode), `got ${res.statusCode}: ${res.body}`);
