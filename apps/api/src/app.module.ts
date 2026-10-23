@@ -14,6 +14,7 @@ import { DeviationsController } from './modules/kpi/deviations.controller';
 import { PortalController } from './modules/portal/portal.controller';
 import { ProjectsController } from './modules/projects/projects.controller';
 import { TasksController } from './modules/tasks/tasks.controller';
+import { TimeEntriesController } from './modules/time-entries/time-entries.controller';
 
 @Module({
   controllers: [
@@ -23,6 +24,7 @@ import { TasksController } from './modules/tasks/tasks.controller';
     ProjectsController,
     TasksController,
     AttendanceController,
+    TimeEntriesController,
     PortalController,
     DeviationsController,
     AuditController,

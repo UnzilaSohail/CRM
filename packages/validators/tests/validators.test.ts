@@ -9,6 +9,8 @@ import {
   taskPatchInput,
   taskProgressInput,
   thresholdsInput,
+  timeEntryInput,
+  timeEntryQuery,
 } from '../src/index.js';
 
 const uuid = '11111111-1111-1111-1111-111111111111';
@@ -45,6 +47,30 @@ describe('task validators', () => {
   it('assignee must be a uuid', () => {
     expect(assigneeInput.safeParse({ userId: uuid }).success).toBe(true);
     expect(assigneeInput.safeParse({ userId: '1' }).success).toBe(false);
+  });
+});
+
+describe('time entry validators', () => {
+  const base = { taskId: uuid, minutes: 60 };
+
+  it('accepts whole minutes up to a full day', () => {
+    expect(timeEntryInput.safeParse(base).success).toBe(true);
+    expect(timeEntryInput.safeParse({ ...base, minutes: 1440, day: '2026-10-22' }).success).toBe(
+      true,
+    );
+  });
+  it('rejects zero, fractions, strings and more than 24h', () => {
+    for (const minutes of [0, -1, 0.5, 1441, '60', Number.NaN])
+      expect(timeEntryInput.safeParse({ ...base, minutes }).success, String(minutes)).toBe(false);
+  });
+  it('rejects bad dates and long notes', () => {
+    expect(timeEntryInput.safeParse({ ...base, day: '2026-02-30' }).success).toBe(false);
+    expect(timeEntryInput.safeParse({ ...base, note: 'x'.repeat(501) }).success).toBe(false);
+  });
+  it('query range must be ordered', () => {
+    expect(timeEntryQuery.safeParse({}).success).toBe(true);
+    expect(timeEntryQuery.safeParse({ from: '2026-10-01', to: '2026-10-31' }).success).toBe(true);
+    expect(timeEntryQuery.safeParse({ from: '2026-10-31', to: '2026-10-01' }).success).toBe(false);
   });
 });
 

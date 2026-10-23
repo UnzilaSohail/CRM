@@ -75,6 +75,27 @@ export const taskListQuery = z.object({
 
 export const assigneeInput = z.object({ userId: z.string().uuid() });
 
+export const timeEntryInput = z.object({
+  taskId: z.string().uuid(),
+  /** Whole minutes, one entry at most a full day. */
+  minutes: z.number().int().min(1).max(1440),
+  /** Defaults to today in the tenant time zone; future days are rejected by the API. */
+  day: isoDate.optional(),
+  note: z.string().trim().max(500).optional(),
+});
+
+export const timeEntryQuery = z
+  .object({
+    from: isoDate.optional(),
+    to: isoDate.optional(),
+    /** Managers only: whose time to list. Defaults to yourself. */
+    userId: z.string().uuid().optional(),
+  })
+  .refine((q) => !q.from || !q.to || q.from <= q.to, {
+    message: 'from must not be after to',
+    path: ['from'],
+  });
+
 export const taskProgressInput = z.object({
   percentComplete: z.number().min(0).max(100),
   blocker: z.string().trim().max(500).optional(),
