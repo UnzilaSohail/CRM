@@ -1,11 +1,15 @@
-import "reflect-metadata";
-import { NestFactory } from "@nestjs/core";
-import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
-import { AppModule } from "./app.module";
+import 'reflect-metadata';
+import { createApp } from './app';
+import { parseEnv } from './config/env';
 
-async function bootstrap() {
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
-  app.enableCors({ origin: process.env.WEB_ORIGIN ?? "http://localhost:3000" });
-  await app.listen(Number(process.env.API_PORT ?? 4000), "0.0.0.0");
+async function bootstrap(): Promise<void> {
+  const env = parseEnv();
+  const app = await createApp();
+  await app.listen(env.PORT, '0.0.0.0');
+  console.log(`API listening on :${env.PORT} (docs at /docs)`);
 }
-bootstrap().catch((e) => { console.error(e); process.exit(1); });
+
+bootstrap().catch((err: unknown) => {
+  console.error(err);
+  process.exit(1);
+});

@@ -1,6 +1,6 @@
-import Link from "next/link";
-import { Badge, Card, Progress, statusTone } from "@/components/ui";
-import { milestoneStatusOf, projectKpi, projects } from "@/lib/data";
+import Link from 'next/link';
+import { Badge, Card, Progress, statusTone } from '@/components/ui';
+import { milestoneStatusOf, projectKpi, projects } from '@/lib/data';
 
 /** Client view: only explicitly published data. No internal comments, attendance, costs or staffing KPIs. */
 export default function PortalPage() {
@@ -10,8 +10,10 @@ export default function PortalPage() {
   return (
     <main className="mx-auto max-w-4xl space-y-4 p-4 md:p-8">
       <header className="flex items-center justify-between rounded-xl bg-navy p-4 text-white">
-        <span className="font-semibold">AiNetworks · Client Portal</span>
-        <Link href="/dashboard" className="text-xs underline">Back to internal view</Link>
+        <h1 className="font-semibold">AiNetworks · Client portal</h1>
+        <Link href="/dashboard" className="text-xs underline">
+          Back to internal view
+        </Link>
       </header>
 
       <Card title={p.name}>
@@ -24,7 +26,9 @@ export default function PortalPage() {
           {p.milestones.map((m, i) => (
             <li key={i} className="flex items-center justify-between gap-2">
               <span>Milestone {i + 1}</span>
-              <Badge tone={statusTone(milestoneStatusOf(m.percentComplete))}>{milestoneStatusOf(m.percentComplete)}</Badge>
+              <Badge tone={statusTone(milestoneStatusOf(m.percentComplete))}>
+                {milestoneStatusOf(m.percentComplete)}
+              </Badge>
             </li>
           ))}
         </ol>

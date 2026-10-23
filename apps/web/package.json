@@ -6,7 +6,8 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"no unit tests yet; UI is covered by Playwright in /e2e\""
   },
   "dependencies": {
     "@crm/kpi-engine": "workspace:*",

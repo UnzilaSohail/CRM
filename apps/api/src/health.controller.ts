@@ -1,11 +1,14 @@
-import { Controller, Get } from "@nestjs/common";
-import { Public } from "./common/decorators/roles.decorator";
+import { Controller, Get } from '@nestjs/common';
+import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { Public } from './common/decorators/roles.decorator';
 
-@Controller("health")
+@ApiTags('health')
+@Controller('health')
 export class HealthController {
   @Public()
   @Get()
-  check() {
-    return { status: "ok" };
+  @ApiOkResponse({ description: 'Service is up' })
+  check(): { status: 'ok' } {
+    return { status: 'ok' };
   }
 }

@@ -6,22 +6,22 @@ Source: AiNetworks CRM Requirements Document (v1.0). Status: proposal, pending t
 
 One TypeScript codebase end to end: smallest team, fastest delivery, shared types and validation between UI and API.
 
-| Layer | Choice | Why |
-|---|---|---|
-| Monorepo | pnpm + Turborepo | Shared `types`, `kpi-engine`, `ui` packages |
-| Frontend | Next.js (App Router) + React + Tailwind + shadcn/ui | Server components keep the JS bundle small; spec colour tokens map onto Tailwind |
-| Data fetching | TanStack Query, TanStack Table (virtualized), dnd-kit | Cached data, optimistic Kanban drags, fast large tables |
-| Charts | Recharts or uPlot | Light, dashboard-friendly |
-| API | NestJS on Fastify (or Hono for a leaner build) | Modular, RBAC guards, generates OpenAPI docs |
-| Validation | Zod, shared client and server | One schema for forms and API payloads |
-| Database | PostgreSQL + Prisma or Drizzle | Relational data; Row-Level Security enforces tenant isolation |
-| Cache / queues | Redis + BullMQ | KPI snapshot jobs, alert dedupe, notification retries, rate limits |
-| Realtime | WebSocket (Socket.IO, Redis adapter) | Project chat, live alerts, presence |
-| Auth | Auth.js or managed (Clerk / WorkOS / Auth0) | MFA, invites, SSO, sessions (UX01) |
-| Files | Cloudflare R2 / S3, presigned uploads, ClamAV scan | No egress fees, direct-to-bucket uploads |
-| Search | Postgres full-text + `pg_trgm` | Global search and customer dedupe, no Elasticsearch needed |
-| Observability | OpenTelemetry + Sentry + Grafana/Better Stack | Required by spec |
-| Mobile | Responsive PWA with offline queue | Fastest to ship; native later if needed |
+| Layer          | Choice                                                | Why                                                                              |
+| -------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Monorepo       | pnpm + Turborepo                                      | Shared `types`, `kpi-engine`, `ui` packages                                      |
+| Frontend       | Next.js (App Router) + React + Tailwind + shadcn/ui   | Server components keep the JS bundle small; spec colour tokens map onto Tailwind |
+| Data fetching  | TanStack Query, TanStack Table (virtualized), dnd-kit | Cached data, optimistic Kanban drags, fast large tables                          |
+| Charts         | Recharts or uPlot                                     | Light, dashboard-friendly                                                        |
+| API            | NestJS on Fastify (or Hono for a leaner build)        | Modular, RBAC guards, generates OpenAPI docs                                     |
+| Validation     | Zod, shared client and server                         | One schema for forms and API payloads                                            |
+| Database       | PostgreSQL + Prisma or Drizzle                        | Relational data; Row-Level Security enforces tenant isolation                    |
+| Cache / queues | Redis + BullMQ                                        | KPI snapshot jobs, alert dedupe, notification retries, rate limits               |
+| Realtime       | WebSocket (Socket.IO, Redis adapter)                  | Project chat, live alerts, presence                                              |
+| Auth           | Auth.js or managed (Clerk / WorkOS / Auth0)           | MFA, invites, SSO, sessions (UX01)                                               |
+| Files          | Cloudflare R2 / S3, presigned uploads, ClamAV scan    | No egress fees, direct-to-bucket uploads                                         |
+| Search         | Postgres full-text + `pg_trgm`                        | Global search and customer dedupe, no Elasticsearch needed                       |
+| Observability  | OpenTelemetry + Sentry + Grafana/Better Stack         | Required by spec                                                                 |
+| Mobile         | Responsive PWA with offline queue                     | Fastest to ship; native later if needed                                          |
 
 ## 2. Hosting
 
@@ -60,14 +60,14 @@ Azure only if clients require it or the team is Microsoft-centric.
 
 ## 5. Build Roadmap (about 12 weeks)
 
-| Weeks | Deliverable |
-|---|---|
-| 1-2 | Settle blocking decisions; KPI dictionary, permissions matrix, ERD; scaffold monorepo, CI/CD, auth, tenancy; design-system package (navy `#0C2752`, blue `#2458E8`, bg `#F5F7FB`); clickable prototype |
-| 3-5 | Customers, contacts, projects, weighted milestones, tasks and assignments (list + Kanban), attendance, My Day, time entries |
-| 6-7 | `kpi-engine` package (pure functions, heavily tested), snapshot jobs, executive dashboard, scorecard, deviation center, alerts and escalation |
-| 8-9 | Client portal and approvals, project chat (WebSocket), publish/unpublish, visibility isolation tests |
-| 10-11 | PWA and mobile polish, CSV/XLSX/PDF exports (queued), notifications (email + push first) |
-| 12 | Security review, load test, WCAG 2.2 AA pass, UAT run, pilot release, runbook |
+| Weeks | Deliverable                                                                                                                                                                                            |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1-2   | Settle blocking decisions; KPI dictionary, permissions matrix, ERD; scaffold monorepo, CI/CD, auth, tenancy; design-system package (navy `#0C2752`, blue `#2458E8`, bg `#F5F7FB`); clickable prototype |
+| 3-5   | Customers, contacts, projects, weighted milestones, tasks and assignments (list + Kanban), attendance, My Day, time entries                                                                            |
+| 6-7   | `kpi-engine` package (pure functions, heavily tested), snapshot jobs, executive dashboard, scorecard, deviation center, alerts and escalation                                                          |
+| 8-9   | Client portal and approvals, project chat (WebSocket), publish/unpublish, visibility isolation tests                                                                                                   |
+| 10-11 | PWA and mobile polish, CSV/XLSX/PDF exports (queued), notifications (email + push first)                                                                                                               |
+| 12    | Security review, load test, WCAG 2.2 AA pass, UAT run, pilot release, runbook                                                                                                                          |
 
 ## 6. Testing
 
@@ -88,22 +88,22 @@ Azure only if clients require it or the team is Microsoft-centric.
 
 ## 8. Next Step
 
-After decisions: scaffold the monorepo in `d:\smsTechnologies\CRM` (Turborepo, Next.js app, API, Prisma schema for all core entities, design tokens, `kpi-engine` package with tests). Optionally write the ERD and KPI dictionary first for review.
+After decisions: scaffold the monorepo in this repo (Turborepo, Next.js app, API, Prisma schema for all core entities, design tokens, `kpi-engine` package with tests). Optionally write the ERD and KPI dictionary first for review.
 
 ## 9. Build Status (updated 2026-10-22)
 
 Defaults from `docs/decisions/0001-default-decisions.md` are in use until the week-1 decisions are answered.
 
-| Area | State |
-|---|---|
-| Monorepo, CI, docker-compose | Done |
-| `kpi-engine` (progress, deviation per spec formula, dedupe keys, time zones) | Done, tested |
-| `types` (permission matrix), `validators` (zod) | Done, tested |
-| Prisma schema, initial migration, RLS + append-only + partial/search indexes | Done, verified on in-process Postgres |
-| Worker: snapshot builder, deviation engine, notification retries, BullMQ queues | Logic done and tested; processors not yet attached to the database |
+| Area                                                                                          | State                                                               |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Monorepo, CI, docker-compose                                                                  | Done                                                                |
+| `kpi-engine` (progress, deviation per spec formula, dedupe keys, time zones)                  | Done, tested                                                        |
+| `types` (permission matrix), `validators` (zod)                                               | Done, tested                                                        |
+| Prisma schema, initial migration, RLS + append-only + partial/search indexes                  | Done, verified on in-process Postgres                               |
+| Worker: snapshot builder, deviation engine, notification retries, BullMQ queues               | Logic done and tested; processors not yet attached to the database  |
 | API: deny-by-default roles, projects, portal (separate DTOs), deviations + acknowledge, audit | Done on in-memory data; authorization matrix test (62 cases) passes |
-| Web: UX01-UX16 screens, responsive, PWA manifest, offline page, security headers | Done on sample data |
-| Docs: KPI dictionary (draft), ERD, permission matrix, local runbook | Done |
-| Real auth (MFA, invites, sessions), Prisma data access, web-to-API wiring | Next |
-| WebSocket chat, file uploads + scanning, exports, email/push notifications | Not started |
-| Observability, Terraform, load tests (k6), Playwright UAT, axe | Not started |
+| Web: UX01-UX16 screens, responsive, PWA manifest, offline page, security headers              | Done on sample data                                                 |
+| Docs: KPI dictionary (draft), ERD, permission matrix, local runbook                           | Done                                                                |
+| Real auth (MFA, invites, sessions), Prisma data access, web-to-API wiring                     | Next                                                                |
+| WebSocket chat, file uploads + scanning, exports, email/push notifications                    | Not started                                                         |
+| Observability, Terraform, load tests (k6), Playwright UAT, axe                                | Not started                                                         |

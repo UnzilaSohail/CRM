@@ -1,1 +1,5 @@
-{ "extends": "@crm/tsconfig/base.json", "compilerOptions": { "module": "NodeNext", "moduleResolution": "NodeNext" }, "include": ["src", "tests"] }
+{
+  "extends": "@crm/tsconfig/base.json",
+  "compilerOptions": { "module": "NodeNext", "moduleResolution": "NodeNext" },
+  "include": ["src", "tests"]
+}

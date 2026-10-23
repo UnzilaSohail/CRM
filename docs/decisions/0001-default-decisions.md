@@ -2,14 +2,14 @@
 
 Status: provisional. Built on the recommended option for each open decision in `plan.md` section 7 so work is not blocked. Revisit when the stakeholders answer.
 
-| Decision | Default used | Reversible? |
-|---|---|---|
-| MVP scope | Billing, invoices, opportunity pipeline and profitability are Phase 2. Their module folders exist but stay empty. | Yes |
-| Mobile | Responsive PWA | Yes |
-| Hosting | Containerised, cloud-neutral. Pilot on Vercel + Railway/Fly + Neon + Upstash, AWS via Terraform later. | Yes |
-| KPI weights | Per-project milestone weights; thresholds default to warning below 80% attainment and critical below 50% (`packages/kpi-engine`). Employee progress needs manager approval (modelled by `Approval`). | Config only |
-| Notifications | Email and in-app first; SMS/WhatsApp later | Yes |
-| Geolocation | Columns exist on `Attendance`, nullable and unused until policy is decided | Yes |
+| Decision      | Default used                                                                                                                                                                                         | Reversible? |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| MVP scope     | Billing, invoices, opportunity pipeline and profitability are Phase 2. Their module folders exist but stay empty.                                                                                    | Yes         |
+| Mobile        | Responsive PWA                                                                                                                                                                                       | Yes         |
+| Hosting       | Containerised, cloud-neutral. Pilot on Vercel + Railway/Fly + Neon + Upstash, AWS via Terraform later.                                                                                               | Yes         |
+| KPI weights   | Per-project milestone weights; thresholds default to warning below 80% attainment and critical below 50% (`packages/kpi-engine`). Employee progress needs manager approval (modelled by `Approval`). | Config only |
+| Notifications | Email and in-app first; SMS/WhatsApp later                                                                                                                                                           | Yes         |
+| Geolocation   | Columns exist on `Attendance`, nullable and unused until policy is decided                                                                                                                           | Yes         |
 
 ## Enhancements made to the plan
 

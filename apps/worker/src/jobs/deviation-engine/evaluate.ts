@@ -1,7 +1,12 @@
 import {
-  actualProgress, alertKey, computeDeviation, plannedProgress, shouldRaise,
-  type DeviationThresholds, type Milestone,
-} from "@crm/kpi-engine";
+  actualProgress,
+  alertKey,
+  computeDeviation,
+  plannedProgress,
+  shouldRaise,
+  type DeviationThresholds,
+  type Milestone,
+} from '@crm/kpi-engine';
 
 export interface ProjectInput {
   id: string;
@@ -16,7 +21,7 @@ export interface ProjectInput {
 export interface AlertToRaise {
   tenantId: string;
   projectId: string;
-  severity: "watch" | "critical";
+  severity: 'watch' | 'critical';
   dedupeKey: string;
   baselineVersion: number;
   planned: number;
@@ -46,12 +51,17 @@ export function evaluateProject(
   const planned = plannedProgress(p.milestones, today);
   const actual = actualProgress(p.milestones);
   const d = computeDeviation(planned, actual, thresholds);
-  if (d.severity === "none") return null;
+  if (d.severity === 'none') return null;
 
-  const key = alertKey({ subjectId: p.id, baselineVersion: p.baselineVersion, severity: d.severity, period });
+  const key = alertKey({
+    subjectId: p.id,
+    baselineVersion: p.baselineVersion,
+    severity: d.severity,
+    period,
+  });
   if (!shouldRaise(key, alreadyRaised)) return null;
 
-  const critical = d.severity === "critical";
+  const critical = d.severity === 'critical';
   return {
     tenantId: p.tenantId,
     projectId: p.id,

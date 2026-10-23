@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable } from '@nestjs/common';
 
 export interface AuditRecord {
   at: string;
@@ -14,7 +14,7 @@ export interface AuditRecord {
 export class AuditService {
   private readonly events: AuditRecord[] = [];
 
-  record(e: Omit<AuditRecord, "at">): void {
+  record(e: Omit<AuditRecord, 'at'>): void {
     this.events.push(Object.freeze({ at: new Date().toISOString(), ...e }));
   }
 

@@ -10,7 +10,7 @@
     "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
-    "test": "pnpm build && node --test \"tests/*.test.mjs\""
+    "test": "pnpm build && vitest run && node --test \"tests/*.test.mjs\""
   },
   "dependencies": {
     "@crm/kpi-engine": "workspace:*",
@@ -20,11 +20,18 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "@crm/types": "workspace:*",
-    "@crm/validators": "workspace:*"
+    "@crm/validators": "workspace:*",
+    "@nestjs/swagger": "^7.4.2",
+    "@fastify/static": "^7.0.4",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@crm/tsconfig": "workspace:*",
     "@types/node": "^22.0.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "@nestjs/testing": "^10.4.4",
+    "@swc/core": "^1.7.35",
+    "unplugin-swc": "^1.5.1",
+    "vitest": "^2.1.3"
   }
 }

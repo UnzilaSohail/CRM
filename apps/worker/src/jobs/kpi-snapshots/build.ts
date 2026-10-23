@@ -1,6 +1,13 @@
-import { actualProgress, localDate, plannedProgress, taskCounts, type Milestone, type TaskLike } from "@crm/kpi-engine";
+import {
+  actualProgress,
+  localDate,
+  plannedProgress,
+  taskCounts,
+  type Milestone,
+  type TaskLike,
+} from '@crm/kpi-engine';
 
-export type Period = "DAILY" | "WEEKLY" | "MONTHLY";
+export type Period = 'DAILY' | 'WEEKLY' | 'MONTHLY';
 
 export interface SnapshotInput {
   projectId: string;
@@ -27,8 +34,8 @@ export interface Snapshot {
 /** First day of the period containing `day` (yyyy-mm-dd); weeks start on Monday. */
 export function periodStart(day: string, period: Period): string {
   const d = new Date(`${day}T00:00:00Z`);
-  if (period === "WEEKLY") d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
-  if (period === "MONTHLY") d.setUTCDate(1);
+  if (period === 'WEEKLY') d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  if (period === 'MONTHLY') d.setUTCDate(1);
   return d.toISOString().slice(0, 10);
 }
 

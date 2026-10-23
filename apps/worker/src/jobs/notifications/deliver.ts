@@ -2,7 +2,7 @@ export type Channel = (recipient: string, message: string) => Promise<void>;
 
 export interface DeliveryResult {
   recipient: string;
-  status: "delivered" | "failed";
+  status: 'delivered' | 'failed';
   attempts: number;
   error?: string;
 }
@@ -19,16 +19,16 @@ export async function deliverAll(
 ): Promise<DeliveryResult[]> {
   return Promise.all(
     recipients.map(async (recipient): Promise<DeliveryResult> => {
-      let lastError = "";
+      let lastError = '';
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
           await send(recipient, message);
-          return { recipient, status: "delivered", attempts: attempt };
+          return { recipient, status: 'delivered', attempts: attempt };
         } catch (e) {
           lastError = e instanceof Error ? e.message : String(e);
         }
       }
-      return { recipient, status: "failed", attempts: maxAttempts, error: lastError };
+      return { recipient, status: 'failed', attempts: maxAttempts, error: lastError };
     }),
   );
 }

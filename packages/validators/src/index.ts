@@ -1,6 +1,6 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use yyyy-mm-dd");
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use yyyy-mm-dd');
 
 export const customerInput = z.object({
   name: z.string().trim().min(2).max(120),
@@ -21,7 +21,10 @@ export const milestoneInput = z
     plannedStart: isoDate,
     plannedEnd: isoDate,
   })
-  .refine((m) => m.plannedEnd >= m.plannedStart, { message: "End date must not be before start", path: ["plannedEnd"] });
+  .refine((m) => m.plannedEnd >= m.plannedStart, {
+    message: 'End date must not be before start',
+    path: ['plannedEnd'],
+  });
 
 export const projectInput = z
   .object({
@@ -31,7 +34,10 @@ export const projectInput = z
     endDate: isoDate,
     milestones: z.array(milestoneInput).min(1),
   })
-  .refine((p) => p.endDate >= p.startDate, { message: "End date must not be before start", path: ["endDate"] });
+  .refine((p) => p.endDate >= p.startDate, {
+    message: 'End date must not be before start',
+    path: ['endDate'],
+  });
 
 export const taskProgressInput = z.object({
   percentComplete: z.number().min(0).max(100),
@@ -47,18 +53,21 @@ export const dailyActivityInput = z.object({
 
 export const thresholdsInput = z
   .object({ watch: z.number().positive().lt(100), critical: z.number().positive().max(100) })
-  .refine((t) => t.critical > t.watch, { message: "Critical must be higher than watch", path: ["critical"] });
+  .refine((t) => t.critical > t.watch, {
+    message: 'Critical must be higher than watch',
+    path: ['critical'],
+  });
 
 /** Critical deviations require an explanation (spec section 6); watch-level ones do not. */
 export const deviationAckInput = z
   .object({
-    severity: z.enum(["watch", "critical"]),
-    cause: z.string().trim().max(1000).default(""),
+    severity: z.enum(['watch', 'critical']),
+    cause: z.string().trim().max(1000).default(''),
     recoveryOwnerId: z.string().uuid().optional(),
   })
-  .refine((a) => a.severity !== "critical" || a.cause.length > 0, {
-    message: "A cause is required for critical deviations",
-    path: ["cause"],
+  .refine((a) => a.severity !== 'critical' || a.cause.length > 0, {
+    message: 'A cause is required for critical deviations',
+    path: ['cause'],
   });
 
 export const messageInput = z.object({
