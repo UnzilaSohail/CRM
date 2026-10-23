@@ -19,6 +19,8 @@ const NOW = new Date('2026-10-22T08:00:00Z');
 const ROLES = ['CEO', 'SUPER_ADMIN', 'PROJECT_MANAGER', 'TEAM_LEAD', 'EMPLOYEE', 'CUSTOMER'];
 const INTERNAL = ROLES.filter((r) => r !== 'CUSTOMER');
 const MANAGE = ['CEO', 'PROJECT_MANAGER'];
+const LEADS = ['CEO', 'PROJECT_MANAGER', 'TEAM_LEAD']; // create and assign tasks
+const WORKERS = [...LEADS, 'EMPLOYEE']; // move tasks, check in and out
 
 let app;
 let db;
@@ -67,6 +69,15 @@ const endpoints = () => [
   ['GET', `/projects/${DEMO.projects.coreApi}`, INTERNAL],
   ['GET', '/portal/projects', ['CUSTOMER']],
   ['GET', `/portal/projects/${DEMO.projects.coreApi}`, ['CUSTOMER']],
+  ['GET', '/tasks', INTERNAL],
+  ['GET', `/tasks/${DEMO.tasks.rotateKeys}`, INTERNAL],
+  ['POST', '/tasks', LEADS, { projectId: DEMO.projects.coreApi, title: 'Matrix probe task' }],
+  ['PATCH', `/tasks/${DEMO.tasks.loadTest}`, WORKERS, { title: 'Load test the token service' }],
+  ['POST', `/tasks/${DEMO.tasks.loadTest}/assignees`, LEADS, { userId: DEMO.users.EMPLOYEE }],
+  ['DELETE', `/tasks/${DEMO.tasks.loadTest}/assignees/${DEMO.users.EMPLOYEE}`, LEADS],
+  ['GET', '/attendance/today', WORKERS],
+  ['POST', '/attendance/check-in', WORKERS],
+  ['POST', '/attendance/check-out', WORKERS],
   ['GET', '/deviations', MANAGE],
   ['POST', `/deviations/${DEMO.projects.etl}/acknowledge`, MANAGE, { severity: 'watch' }],
   ['GET', '/audit', ['CEO', 'SUPER_ADMIN']],
@@ -401,6 +412,262 @@ describe('deviation acknowledgement', () => {
     const alerts = await db.prisma.alert.findMany({ where: { projectId: DEMO.projects.etl } });
     assert.equal(alerts.length, 2);
     assert.ok(alerts.every((a) => a.state === 'ACKNOWLEDGED' && a.acknowledgedBy));
+  });
+});
+
+describe('tasks', () => {
+  const T = DEMO.tasks;
+  const titles = (res) => json(res).items.map((t) => t.title);
+  const FAKE_ID = '99999999-9999-4999-8999-999999999999';
+  let flow; // a task created by the manager and walked through its life cycle
+
+  it('managers see every task, assignees included', async () => {
+    const res = await call('GET', '/tasks', tokens.CEO);
+    assert.equal(res.statusCode, 200);
+    assert.equal(json(res).items.length, 4);
+    const rotate = json(res).items.find((t) => t.id === T.rotateKeys);
+    assert.deepEqual(
+      rotate.assignees.map((a) => a.name),
+      ['Zara Ahmed'],
+    );
+    assert.equal(rotate.dueDate, '2026-10-30');
+  });
+
+  it('an employee sees only the tasks assigned to them', async () => {
+    const res = await call('GET', '/tasks', tokens.EMPLOYEE);
+    assert.deepEqual(titles(res).sort(), ['Backfill ingestion jobs', 'Rotate API signing keys']);
+    assert.equal(
+      (await call('GET', `/tasks/${T.settlementSpec}`, tokens.EMPLOYEE)).statusCode,
+      404,
+    );
+    assert.equal((await call('GET', `/tasks/${T.rotateKeys}`, tokens.EMPLOYEE)).statusCode, 200);
+    // asking for someone else's tasks does not widen the scope
+    const other = await call('GET', `/tasks?assigneeId=${DEMO.users.TEAM_LEAD}`, tokens.EMPLOYEE);
+    assert.equal(json(other).items.length, 0);
+  });
+
+  it('filters by project, status and assignee', async () => {
+    const byProject = await call('GET', `/tasks?projectId=${DEMO.projects.etl}`, tokens.CEO);
+    assert.deepEqual(titles(byProject), ['Backfill ingestion jobs']);
+    const byStatus = await call('GET', '/tasks?status=IN_PROGRESS', tokens.CEO);
+    assert.deepEqual(titles(byStatus), ['Rotate API signing keys']);
+    const byUser = await call('GET', `/tasks?assigneeId=${DEMO.users.TEAM_LEAD}`, tokens.CEO);
+    assert.deepEqual(titles(byUser), ['Write settlement endpoint spec']);
+  });
+
+  it('orders by due date and paginates with a cursor', async () => {
+    const page1 = json(await call('GET', '/tasks?limit=2', tokens.CEO));
+    assert.deepEqual(
+      page1.items.map((t) => t.dueDate),
+      ['2026-10-28', '2026-10-30'],
+    );
+    assert.ok(page1.nextCursor);
+    const page2 = json(await call('GET', `/tasks?limit=2&cursor=${page1.nextCursor}`, tokens.CEO));
+    assert.deepEqual(
+      page2.items.map((t) => t.dueDate),
+      ['2026-11-05', '2026-11-12'],
+    );
+    assert.equal(page2.nextCursor, null);
+  });
+
+  it('validates query and ids', async () => {
+    for (const url of ['/tasks?limit=9999', '/tasks?status=NOPE', '/tasks?projectId=x', '/tasks/x'])
+      assert.equal((await call('GET', url, tokens.CEO)).statusCode, 400, url);
+    assert.equal((await call('GET', `/tasks/${FAKE_ID}`, tokens.CEO)).statusCode, 404);
+  });
+
+  it('never exposes cost, email or credentials through assignees', async () => {
+    const res = await call('GET', '/tasks', tokens.PROJECT_MANAGER);
+    for (const leak of ['hourlyCost', 'email', 'passwordHash', 'mfaSecret', 'role'])
+      assert.ok(!res.body.includes(leak), `leaked ${leak}`);
+  });
+
+  it('a manager creates a task; validation and scope are enforced', async () => {
+    const ok = await call('POST', '/tasks', tokens.PROJECT_MANAGER, {
+      projectId: DEMO.projects.coreApi,
+      title: 'Document the settlement flow',
+      dueDate: '2026-11-20',
+    });
+    assert.equal(ok.statusCode, 201, ok.body);
+    flow = json(ok);
+    assert.equal(flow.status, 'OPEN');
+    assert.deepEqual(flow.assignees, []);
+
+    const bad = (payload) => call('POST', '/tasks', tokens.CEO, payload);
+    const base = { projectId: DEMO.projects.coreApi, title: 'Valid title' };
+    assert.equal((await bad({ ...base, title: 'x' })).statusCode, 400);
+    assert.equal((await bad({ ...base, dueDate: '2026-02-30' })).statusCode, 400);
+    assert.equal((await bad({ ...base, projectId: FAKE_ID })).statusCode, 404);
+
+    // a milestone that belongs to a different project is rejected
+    const etlMilestone = await db.prisma.milestone.findFirst({
+      where: { projectId: DEMO.projects.etl },
+    });
+    assert.equal((await bad({ ...base, milestoneId: etlMilestone.id })).statusCode, 400);
+  });
+
+  it('cannot create a task in another tenant, even with a valid project id', async () => {
+    const customer = await db.prisma.customer.create({
+      data: { tenantId: DEMO.otherTenant, name: 'Foreign Tasks Co', nameKey: 'foreign tasks co' },
+    });
+    const project = await db.prisma.project.create({
+      data: {
+        tenantId: DEMO.otherTenant,
+        customerId: customer.id,
+        name: 'Foreign project',
+        startDate: new Date('2026-01-01T00:00:00Z'),
+        endDate: new Date('2026-02-01T00:00:00Z'),
+      },
+    });
+    const res = await call('POST', '/tasks', tokens.CEO, {
+      projectId: project.id,
+      title: 'Sneaky',
+    });
+    assert.equal(res.statusCode, 404);
+  });
+
+  it('an employee works only their own tasks, and cannot complete them', async () => {
+    const assign = await call('POST', `/tasks/${flow.id}/assignees`, tokens.TEAM_LEAD, {
+      userId: DEMO.users.EMPLOYEE,
+    });
+    assert.equal(assign.statusCode, 201, assign.body);
+
+    const patch = (token, payload, id = flow.id) => call('PATCH', `/tasks/${id}`, token, payload);
+    assert.equal((await patch(tokens.EMPLOYEE, { status: 'IN_PROGRESS' })).statusCode, 200);
+    assert.equal((await patch(tokens.EMPLOYEE, { status: 'DONE' })).statusCode, 403);
+    assert.equal((await patch(tokens.EMPLOYEE, { status: 'CANCELLED' })).statusCode, 403);
+    assert.equal((await patch(tokens.EMPLOYEE, { title: 'Renamed by employee' })).statusCode, 403);
+    // not theirs: the task does not even exist for them
+    assert.equal(
+      (await patch(tokens.EMPLOYEE, { status: 'IN_PROGRESS' }, T.settlementSpec)).statusCode,
+      404,
+    );
+  });
+
+  it('follows the status life cycle and rejects impossible moves', async () => {
+    const patch = (token, payload) => call('PATCH', `/tasks/${flow.id}`, token, payload);
+    assert.equal((await patch(tokens.TEAM_LEAD, { status: 'DONE' })).statusCode, 200);
+    assert.equal((await patch(tokens.PROJECT_MANAGER, { status: 'OPEN' })).statusCode, 400);
+    assert.equal(
+      (await patch(tokens.PROJECT_MANAGER, { status: 'DONE' })).statusCode,
+      200,
+      'same status is a no-op',
+    );
+    assert.equal((await patch(tokens.PROJECT_MANAGER, { status: 'IN_PROGRESS' })).statusCode, 200);
+    assert.equal((await patch(tokens.CEO, { status: 'CANCELLED' })).statusCode, 200);
+    assert.equal((await patch(tokens.CEO, { status: 'DONE' })).statusCode, 400);
+    assert.equal((await patch(tokens.CEO, {})).statusCode, 400);
+    assert.equal((await patch(tokens.CEO, { dueDate: '2026-13-01' })).statusCode, 400);
+  });
+
+  it('clears and sets a due date', async () => {
+    const cleared = await call('PATCH', `/tasks/${flow.id}`, tokens.CEO, { dueDate: null });
+    assert.equal(json(cleared).dueDate, null);
+    const set = await call('PATCH', `/tasks/${flow.id}`, tokens.CEO, { dueDate: '2026-12-01' });
+    assert.equal(json(set).dueDate, '2026-12-01');
+  });
+
+  it('assigns and unassigns people; customers and strangers cannot be assigned', async () => {
+    const url = `/tasks/${T.loadTest}/assignees`;
+    const added = await call('POST', url, tokens.PROJECT_MANAGER, { userId: DEMO.users.TEAM_LEAD });
+    assert.equal(added.statusCode, 201);
+    assert.deepEqual(
+      json(added).assignees.map((a) => a.name),
+      ['Hamza Tariq'],
+    );
+    // assigning twice does not duplicate
+    const again = await call('POST', url, tokens.PROJECT_MANAGER, { userId: DEMO.users.TEAM_LEAD });
+    assert.equal(json(again).assignees.length, 1);
+
+    assert.equal(
+      (await call('POST', url, tokens.CEO, { userId: DEMO.users.CUSTOMER })).statusCode,
+      400,
+    );
+    assert.equal((await call('POST', url, tokens.CEO, { userId: FAKE_ID })).statusCode, 400);
+    assert.equal((await call('POST', url, tokens.CEO, { userId: 'nope' })).statusCode, 400);
+
+    const removed = await call('DELETE', `${url}/${DEMO.users.TEAM_LEAD}`, tokens.PROJECT_MANAGER);
+    assert.equal(removed.statusCode, 200);
+    assert.deepEqual(json(removed).assignees, []);
+    assert.equal(
+      (await call('DELETE', `${url}/${DEMO.users.TEAM_LEAD}`, tokens.PROJECT_MANAGER)).statusCode,
+      404,
+    );
+  });
+
+  it('employees cannot create or assign tasks', async () => {
+    const create = await call('POST', '/tasks', tokens.EMPLOYEE, {
+      projectId: DEMO.projects.coreApi,
+      title: 'Employee made task',
+    });
+    assert.equal(create.statusCode, 403);
+    const assign = await call('POST', `/tasks/${T.rotateKeys}/assignees`, tokens.EMPLOYEE, {
+      userId: DEMO.users.EMPLOYEE,
+    });
+    assert.equal(assign.statusCode, 403);
+  });
+
+  it('audits every change', async () => {
+    const actions = json(await call('GET', '/audit', tokens.CEO)).map((a) => a.action);
+    for (const a of ['task.create', 'task.status', 'task.update', 'task.assign', 'task.unassign'])
+      assert.ok(actions.includes(a), a);
+  });
+});
+
+describe('attendance', () => {
+  const today = (token) => call('GET', '/attendance/today', token);
+
+  it('starts the day with nothing recorded, in the tenant time zone', async () => {
+    const res = json(await today(tokens.EMPLOYEE));
+    assert.deepEqual(res, { day: '2026-10-22', checkIn: null, checkOut: null });
+  });
+
+  it('cannot check out before checking in', async () => {
+    assert.equal((await call('POST', '/attendance/check-out', tokens.EMPLOYEE)).statusCode, 409);
+  });
+
+  it('checks in once, then out once', async () => {
+    const inRes = await call('POST', '/attendance/check-in', tokens.EMPLOYEE);
+    assert.equal(inRes.statusCode, 201, inRes.body);
+    assert.equal(json(inRes).checkIn, NOW.toISOString());
+    assert.equal(json(inRes).checkOut, null);
+
+    assert.equal((await call('POST', '/attendance/check-in', tokens.EMPLOYEE)).statusCode, 409);
+    assert.equal(json(await today(tokens.EMPLOYEE)).checkIn, NOW.toISOString());
+
+    const out = await call('POST', '/attendance/check-out', tokens.EMPLOYEE);
+    assert.equal(out.statusCode, 200, out.body);
+    assert.equal(json(out).checkOut, NOW.toISOString());
+    assert.equal((await call('POST', '/attendance/check-out', tokens.EMPLOYEE)).statusCode, 409);
+  });
+
+  it('keeps each person separate', async () => {
+    assert.equal(json(await today(tokens.PROJECT_MANAGER)).checkIn, null);
+    assert.equal(
+      (await call('POST', '/attendance/check-in', tokens.PROJECT_MANAGER)).statusCode,
+      201,
+    );
+  });
+
+  it('a new calendar day in the tenant time zone allows a new check-in', async () => {
+    // 20:00 UTC is already 01:00 the next day in Asia/Karachi
+    const later = new Date('2026-10-22T20:00:00Z');
+    mock.timers.setTime(later.getTime());
+    try {
+      // the 12 hour jump outlives the morning session, so sign a fresh one
+      const claims = { sub: DEMO.users.EMPLOYEE, tid: DEMO.tenant, role: 'EMPLOYEE' };
+      const fresh = signSession(claims, authSecret(), 3600, later.getTime());
+      assert.equal(json(await today(fresh)).day, '2026-10-23');
+      assert.equal((await call('POST', '/attendance/check-in', fresh)).statusCode, 201);
+    } finally {
+      mock.timers.setTime(NOW.getTime());
+    }
+  });
+
+  it('audits check-in and check-out', async () => {
+    const actions = json(await call('GET', '/audit', tokens.CEO)).map((a) => a.action);
+    assert.ok(actions.includes('attendance.check_in'));
+    assert.ok(actions.includes('attendance.check_out'));
   });
 });
 

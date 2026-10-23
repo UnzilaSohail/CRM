@@ -6,12 +6,14 @@ import { AuthService } from './auth/auth.service';
 import { RolesGuard } from './common/guards/roles.guard';
 import { DataModule } from './data/data.module';
 import { HealthController } from './health.controller';
+import { AttendanceController } from './modules/attendance/attendance.controller';
 import { AuditController } from './modules/audit/audit.controller';
 import { AuditService } from './modules/audit/audit.service';
 import { CustomersController } from './modules/customers/customers.controller';
 import { DeviationsController } from './modules/kpi/deviations.controller';
 import { PortalController } from './modules/portal/portal.controller';
 import { ProjectsController } from './modules/projects/projects.controller';
+import { TasksController } from './modules/tasks/tasks.controller';
 
 @Module({
   controllers: [
@@ -19,6 +21,8 @@ import { ProjectsController } from './modules/projects/projects.controller';
     AuthController,
     CustomersController,
     ProjectsController,
+    TasksController,
+    AttendanceController,
     PortalController,
     DeviationsController,
     AuditController,
