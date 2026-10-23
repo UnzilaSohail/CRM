@@ -30,3 +30,5 @@ Source of truth: `packages/types/src/index.ts` (`ROLE_PERMISSIONS`). The API enf
 - Check-in and check-out use the tenant calendar day, allow one check-in per person per day, and are audited.
 
 Scope rules the matrix does not capture yet (enforced once data access is wired): project managers and team leads see only assigned projects or teams, employees see only their own tasks and time, Super Admin cannot bypass tenant isolation.
+
+- Time entries: log only on a task you are assigned to (anything else is 404), at most 24 hours per person per day, no future days, no cancelled tasks. Leads and managers may read anyone's time; employees only their own. Responses never include cost.
