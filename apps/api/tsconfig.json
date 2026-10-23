@@ -6,6 +6,7 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "isolatedModules": false,
+    "declaration": false,
     "strictPropertyInitialization": false
   },
   "include": ["src"]

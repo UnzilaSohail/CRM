@@ -19,6 +19,12 @@ enum RoleKey {
   CUSTOMER
 }
 
+enum CustomerStatus {
+  PROSPECT
+  ACTIVE
+  ARCHIVED
+}
+
 enum ProjectStatus {
   PLANNED
   ACTIVE
@@ -76,6 +82,10 @@ model User {
   name      String
   role      RoleKey
   active    Boolean  @default(true)
+  /// scrypt hash ("salt:hash", hex). Never serialised.
+  passwordHash String?
+  /// Base32 TOTP secret once MFA is enrolled. Never serialised.
+  mfaSecret String?
   // Pay/cost fields are stripped by serializers for every role except CEO.
   hourlyCost Decimal? @db.Decimal(10, 2)
   /// Set for CUSTOMER users: the customer whose portal they may see.
@@ -100,6 +110,10 @@ model Customer {
   name      String
   /// Normalised name used with pg_trgm for duplicate detection.
   nameKey   String
+  industry  String?
+  country   String?
+  status    CustomerStatus @default(ACTIVE)
+  ownerId   String?  @db.Uuid
   createdAt DateTime @default(now())
   deletedAt DateTime?
 
@@ -109,6 +123,7 @@ model Customer {
   users    User[]
 
   @@index([tenantId, nameKey])
+  @@index([tenantId, status])
 }
 
 model Contact {
@@ -300,6 +315,9 @@ model Alert {
   message         String
   createdAt       DateTime      @default(now())
   resolvedAt      DateTime?
+  acknowledgedAt  DateTime?
+  acknowledgedBy  String?       @db.Uuid
+  cause           String?
 
   project Project @relation(fields: [projectId], references: [id])
 

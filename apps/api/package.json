@@ -23,7 +23,8 @@
     "@crm/validators": "workspace:*",
     "@nestjs/swagger": "^7.4.2",
     "@fastify/static": "^7.0.4",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@crm/db": "workspace:*"
   },
   "devDependencies": {
     "@crm/tsconfig": "workspace:*",

@@ -76,6 +76,43 @@ export const messageInput = z.object({
   internal: z.boolean().default(true),
 });
 
+export const loginInput = z.object({
+  email: z.string().trim().email().max(254),
+  password: z.string().min(1).max(200),
+  /** 6-digit TOTP code; required only when the account has MFA enrolled. */
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, 'Enter the 6-digit code')
+    .optional(),
+});
+
+export const mfaConfirmInput = z.object({
+  enrollmentToken: z.string().min(10),
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, 'Enter the 6-digit code'),
+});
+
+export const customerStatus = z.enum(['PROSPECT', 'ACTIVE', 'ARCHIVED']);
+
+export const customerPatchInput = customerInput
+  .partial()
+  .extend({ status: customerStatus.optional() })
+  .refine((p) => Object.keys(p).length > 0, { message: 'Nothing to update' });
+
+export const customerListQuery = z.object({
+  q: z.string().trim().max(120).optional(),
+  industry: z.string().trim().max(80).optional(),
+  country: z.string().trim().max(80).optional(),
+  /** Defaults to everything except archived. */
+  status: customerStatus.optional(),
+  cursor: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+
+export type LoginInput = z.infer<typeof loginInput>;
 export type CustomerInput = z.infer<typeof customerInput>;
 export type ProjectInput = z.infer<typeof projectInput>;
 export type DeviationAckInput = z.infer<typeof deviationAckInput>;

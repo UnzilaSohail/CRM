@@ -1,100 +1,145 @@
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Get,
+  Inject,
   NotFoundException,
   Param,
+  ParseUUIDPipe,
   Post,
-  Req,
 } from '@nestjs/common';
-import {
-  actualProgress,
-  alertKey,
-  computeDeviation,
-  localDate,
-  plannedProgress,
-} from '@crm/kpi-engine';
+import { withTenant, type PrismaClient } from '@crm/db';
+import { alertKey } from '@crm/kpi-engine';
+import { rolesWith } from '@crm/types';
 import { deviationAckInput } from '@crm/validators';
-import { MANAGEMENT_ROLES, Roles, type Role } from '../../common/decorators/roles.decorator';
+import { CurrentUser, type AuthUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { PRISMA } from '../../data/data.module';
 import { AuditService } from '../audit/audit.service';
-import { projectRecords } from '../projects/seed';
+import { projectMetrics } from './metrics';
 
-const TIME_ZONE = 'Asia/Karachi';
+const MANAGE = rolesWith('deviations:manage');
 
 @Controller('deviations')
 export class DeviationsController {
-  private readonly acknowledged = new Map<string, { cause: string; at: string }>();
+  constructor(
+    @Inject(PRISMA) private readonly prisma: PrismaClient,
+    private readonly audit: AuditService,
+  ) {}
 
-  constructor(private readonly audit: AuditService) {}
-
-  private current(p: (typeof projectRecords)[number]) {
-    const today = localDate(new Date(), TIME_ZONE);
-    const d = computeDeviation(plannedProgress(p.milestones, today), actualProgress(p.milestones));
-    return { today, d };
-  }
-
-  @Roles(...MANAGEMENT_ROLES)
+  @Roles(...MANAGE)
   @Get()
-  list() {
-    return projectRecords
-      .map((p) => ({ p, ...this.current(p) }))
-      .filter(({ d }) => d.severity !== 'none')
-      .map(({ p, d, today }) => {
-        const dedupeKey = alertKey({
-          subjectId: p.id,
-          baselineVersion: p.baselineVersion,
-          severity: d.severity as 'watch' | 'critical',
-          period: today,
-        });
-        return {
+  list(@CurrentUser() user: AuthUser) {
+    return withTenant(this.prisma, user.tenantId, async (tx) => {
+      const tenant = await tx.tenant.findUniqueOrThrow({ where: { id: user.tenantId } });
+      const projects = await tx.project.findMany({
+        where: { status: 'ACTIVE' },
+        include: { milestones: true, customer: true },
+      });
+      const rows = projects
+        .map((p) => ({ p, m: projectMetrics(p.milestones, tenant.timeZone) }))
+        .filter(({ m }) => m.severity !== 'none')
+        .map(({ p, m }) => ({
           projectId: p.id,
           project: p.name,
-          ...d,
-          dedupeKey,
-          acknowledged: this.acknowledged.has(dedupeKey),
-        };
+          customer: p.customer.name,
+          planned: m.planned,
+          actual: m.actual,
+          negativeDeviation: m.negativeDeviation,
+          severity: m.severity as 'watch' | 'critical',
+          dedupeKey: alertKey({
+            subjectId: p.id,
+            baselineVersion: p.baselineVersion,
+            severity: m.severity as 'watch' | 'critical',
+            period: m.today,
+          }),
+        }));
+      const acked = await tx.alert.findMany({
+        where: { dedupeKey: { in: rows.map((r) => r.dedupeKey) }, acknowledgedAt: { not: null } },
+        select: { dedupeKey: true, cause: true },
       });
+      const byKey = new Map(acked.map((a) => [a.dedupeKey, a.cause]));
+      return rows
+        .map((r) => ({
+          ...r,
+          acknowledged: byKey.has(r.dedupeKey),
+          cause: byKey.get(r.dedupeKey) ?? null,
+        }))
+        .sort((a, b) => b.negativeDeviation - a.negativeDeviation);
+    });
   }
 
-  /** Critical deviations require a cause (validators). Every acknowledgement is audited. */
-  @Roles(...MANAGEMENT_ROLES)
+  /** Critical deviations require a cause. The alert row and its audit event commit together. */
+  @Roles(...MANAGE)
   @Post(':projectId/acknowledge')
   acknowledge(
-    @Param('projectId') projectId: string,
+    @CurrentUser() user: AuthUser,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
     @Body() body: unknown,
-    @Req() req: { user: { role: Role } },
   ) {
-    const p = projectRecords.find((x) => x.id === projectId);
-    if (!p) throw new NotFoundException();
-
     const parsed = deviationAckInput.safeParse(body);
     if (!parsed.success) throw new BadRequestException(parsed.error.flatten());
 
-    const { d, today } = this.current(p);
-    if (d.severity === 'none') throw new BadRequestException('No active deviation');
-    if (parsed.data.severity !== d.severity)
-      throw new BadRequestException(`Current severity is ${d.severity}`);
+    return withTenant(this.prisma, user.tenantId, async (tx) => {
+      const tenant = await tx.tenant.findUniqueOrThrow({ where: { id: user.tenantId } });
+      const p = await tx.project.findUnique({
+        where: { id: projectId },
+        include: { milestones: true },
+      });
+      if (!p) throw new NotFoundException();
 
-    const key = alertKey({
-      subjectId: p.id,
-      baselineVersion: p.baselineVersion,
-      severity: d.severity,
-      period: today,
-    });
-    this.acknowledged.set(key, { cause: parsed.data.cause, at: new Date().toISOString() });
-    this.audit.record({
-      actorRole: req.user.role,
-      action: 'deviation.acknowledge',
-      entityType: 'Project',
-      entityId: p.id,
-      detail: {
-        severity: d.severity,
-        negativeDeviation: d.negativeDeviation,
-        cause: parsed.data.cause,
+      const m = projectMetrics(p.milestones, tenant.timeZone);
+      if (m.severity === 'none') throw new BadRequestException('No active deviation');
+      if (parsed.data.severity !== m.severity) {
+        throw new BadRequestException(`Current severity is ${m.severity}`);
+      }
+
+      const dedupeKey = alertKey({
+        subjectId: p.id,
         baselineVersion: p.baselineVersion,
-      },
+        severity: m.severity,
+        period: m.today,
+      });
+      const existing = await tx.alert.findUnique({
+        where: { tenantId_dedupeKey: { tenantId: user.tenantId, dedupeKey } },
+      });
+      if (existing?.acknowledgedAt) throw new ConflictException('Already acknowledged');
+
+      const data = {
+        state: 'ACKNOWLEDGED' as const,
+        acknowledgedAt: new Date(),
+        acknowledgedBy: user.id,
+        cause: parsed.data.cause || null,
+      };
+      await tx.alert.upsert({
+        where: { tenantId_dedupeKey: { tenantId: user.tenantId, dedupeKey } },
+        update: data,
+        create: {
+          ...data,
+          tenantId: user.tenantId,
+          projectId: p.id,
+          severity: m.severity === 'critical' ? 'CRITICAL' : 'WATCH',
+          dedupeKey,
+          baselineVersion: p.baselineVersion,
+          message: `${p.name}: planned ${m.planned.toFixed(0)}%, actual ${m.actual.toFixed(0)}%`,
+        },
+      });
+      await this.audit.record(tx, {
+        tenantId: user.tenantId,
+        actorId: user.id,
+        action: 'deviation.acknowledge',
+        entityType: 'Project',
+        entityId: p.id,
+        diff: {
+          severity: m.severity,
+          negativeDeviation: m.negativeDeviation,
+          cause: parsed.data.cause,
+          baselineVersion: p.baselineVersion,
+        },
+      });
+      return { acknowledged: true, dedupeKey };
     });
-    return { acknowledged: true, dedupeKey: key };
   }
 }

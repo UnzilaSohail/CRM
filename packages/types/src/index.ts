@@ -75,3 +75,7 @@ export const INTERNAL_ROLES: readonly Role[] = ROLES.filter((r) => r !== 'CUSTOM
 export const MANAGEMENT_ROLES: readonly Role[] = ['CEO', 'SUPER_ADMIN', 'PROJECT_MANAGER'];
 
 export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'DONE' | 'CANCELLED';
+
+/** Roles holding a permission; endpoint role lists derive from the matrix instead of repeating it. */
+export const rolesWith = (permission: Permission): Role[] =>
+  ROLES.filter((r) => can(r, permission));

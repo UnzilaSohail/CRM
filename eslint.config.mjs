@@ -18,5 +18,8 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   { files: ['apps/web/public/sw.js'], languageOptions: { globals: serviceWorkerGlobals } },
-  { files: ['**/scripts/*.mjs'], languageOptions: { globals: { process: 'readonly' } } },
+  {
+    files: ['**/scripts/*.mjs', '**/tests/*.mjs'],
+    languageOptions: { globals: { process: 'readonly', Buffer: 'readonly' } },
+  },
 );

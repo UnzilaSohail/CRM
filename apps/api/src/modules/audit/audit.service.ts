@@ -1,24 +1,28 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma, Tx } from '@crm/db';
 
-export interface AuditRecord {
-  at: string;
-  actorRole: string;
+export interface AuditInput {
+  tenantId: string;
+  actorId?: string;
   action: string;
   entityType: string;
   entityId: string;
-  detail?: unknown;
+  diff?: Prisma.InputJsonValue;
 }
 
-/** Append-only in memory for now; backed by the AuditEvent table (INSERT/SELECT only) once the DB is wired. */
+/** Append-only: writes inside the caller transaction so the audit row commits or rolls back with the change. */
 @Injectable()
 export class AuditService {
-  private readonly events: AuditRecord[] = [];
-
-  record(e: Omit<AuditRecord, 'at'>): void {
-    this.events.push(Object.freeze({ at: new Date().toISOString(), ...e }));
-  }
-
-  list(): readonly AuditRecord[] {
-    return [...this.events];
+  record(tx: Tx, e: AuditInput) {
+    return tx.auditEvent.create({
+      data: {
+        tenantId: e.tenantId,
+        actorId: e.actorId ?? null,
+        action: e.action,
+        entityType: e.entityType,
+        entityId: e.entityId,
+        diff: e.diff,
+      },
+    });
   }
 }
