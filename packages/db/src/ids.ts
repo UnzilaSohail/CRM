@@ -20,6 +20,16 @@ export const DEMO = {
     coreApi: '30000000-0000-4000-8000-000000000001',
     etl: '30000000-0000-4000-8000-000000000002',
   },
+  tasks: {
+    /** coreApi, in progress, assigned to the employee. */
+    rotateKeys: '40000000-0000-4000-8000-000000000001',
+    /** coreApi, open, assigned to the team lead. */
+    settlementSpec: '40000000-0000-4000-8000-000000000002',
+    /** coreApi, open, nobody assigned. */
+    loadTest: '40000000-0000-4000-8000-000000000003',
+    /** etl, open, assigned to the employee. */
+    backfill: '40000000-0000-4000-8000-000000000004',
+  },
 } as const;
 
 export const demoEmail = (role: keyof typeof DEMO.users) =>

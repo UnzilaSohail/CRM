@@ -1,6 +1,13 @@
 import { z } from 'zod';
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use yyyy-mm-dd');
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use yyyy-mm-dd')
+  .refine((d) => {
+    const t = Date.parse(`${d}T00:00:00Z`);
+    // Date.parse rolls 2026-02-30 over to March, so compare the round trip too.
+    return !Number.isNaN(t) && new Date(t).toISOString().startsWith(d);
+  }, 'Not a real date');
 
 export const customerInput = z.object({
   name: z.string().trim().min(2).max(120),
@@ -38,6 +45,35 @@ export const projectInput = z
     message: 'End date must not be before start',
     path: ['endDate'],
   });
+
+export const taskStatus = z.enum(['OPEN', 'IN_PROGRESS', 'DONE', 'CANCELLED']);
+
+export const taskInput = z.object({
+  projectId: z.string().uuid(),
+  milestoneId: z.string().uuid().optional(),
+  title: z.string().trim().min(2).max(200),
+  dueDate: isoDate.optional(),
+});
+
+export const taskPatchInput = z
+  .object({
+    title: z.string().trim().min(2).max(200),
+    status: taskStatus,
+    dueDate: isoDate.nullable(),
+    milestoneId: z.string().uuid().nullable(),
+  })
+  .partial()
+  .refine((p) => Object.keys(p).length > 0, { message: 'Nothing to update' });
+
+export const taskListQuery = z.object({
+  projectId: z.string().uuid().optional(),
+  status: taskStatus.optional(),
+  assigneeId: z.string().uuid().optional(),
+  cursor: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+
+export const assigneeInput = z.object({ userId: z.string().uuid() });
 
 export const taskProgressInput = z.object({
   percentComplete: z.number().min(0).max(100),

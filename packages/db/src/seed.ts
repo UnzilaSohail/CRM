@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient, TaskStatus } from '@prisma/client';
 import { DEMO, demoEmail } from './ids.js';
 import { hashPassword } from './password.js';
 
@@ -121,5 +121,32 @@ export async function seedDemo(prisma: PrismaClient): Promise<void> {
         })),
       });
     }
+  }
+
+  const { users: u, tasks: t, projects: p } = DEMO;
+  const tasks: [id: string, projectId: string, title: string, status: TaskStatus, due: string][] = [
+    [t.rotateKeys, p.coreApi, 'Rotate API signing keys', 'IN_PROGRESS', '2026-10-30'],
+    [t.settlementSpec, p.coreApi, 'Write settlement endpoint spec', 'OPEN', '2026-11-05'],
+    [t.loadTest, p.coreApi, 'Load test the token service', 'OPEN', '2026-11-12'],
+    [t.backfill, p.etl, 'Backfill ingestion jobs', 'OPEN', '2026-10-28'],
+  ];
+  for (const [id, projectId, title, status, due] of tasks) {
+    await prisma.task.upsert({
+      where: { id },
+      update: {},
+      create: { id, tenantId: DEMO.tenant, projectId, title, status, dueDate: date(due) },
+    });
+  }
+  const assignments: [taskId: string, userId: string][] = [
+    [t.rotateKeys, u.EMPLOYEE],
+    [t.settlementSpec, u.TEAM_LEAD],
+    [t.backfill, u.EMPLOYEE],
+  ];
+  for (const [taskId, userId] of assignments) {
+    await prisma.assignment.upsert({
+      where: { taskId_userId: { taskId, userId } },
+      update: {},
+      create: { tenantId: DEMO.tenant, taskId, userId },
+    });
   }
 }

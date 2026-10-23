@@ -19,6 +19,7 @@ export type Permission =
   | 'tasks:write'
   | 'attendance:read:team'
   | 'attendance:read:self'
+  | 'attendance:write:self' // check in and out
   | 'deviations:manage'
   | 'approvals:decide'
   | 'costs:read' // payroll / cost fields: CEO only
@@ -36,6 +37,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'tasks:write',
     'attendance:read:team',
     'attendance:read:self',
+    'attendance:write:self',
     'deviations:manage',
     'approvals:decide',
     'costs:read',
@@ -50,6 +52,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'tasks:write',
     'attendance:read:team',
     'attendance:read:self',
+    'attendance:write:self',
     'deviations:manage',
     'approvals:decide',
   ],
@@ -59,8 +62,15 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'tasks:write',
     'attendance:read:team',
     'attendance:read:self',
+    'attendance:write:self',
   ],
-  EMPLOYEE: ['projects:read', 'tasks:read', 'tasks:write', 'attendance:read:self'],
+  EMPLOYEE: [
+    'projects:read',
+    'tasks:read',
+    'tasks:write',
+    'attendance:read:self',
+    'attendance:write:self',
+  ],
   CUSTOMER: ['portal:read'],
 };
 
@@ -75,6 +85,21 @@ export const INTERNAL_ROLES: readonly Role[] = ROLES.filter((r) => r !== 'CUSTOM
 export const MANAGEMENT_ROLES: readonly Role[] = ['CEO', 'SUPER_ADMIN', 'PROJECT_MANAGER'];
 
 export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'DONE' | 'CANCELLED';
+
+/** Allowed task status moves. Finished and cancelled tasks can be reopened, never skipped over. */
+export const TASK_TRANSITIONS: Record<TaskStatus, readonly TaskStatus[]> = {
+  OPEN: ['IN_PROGRESS', 'CANCELLED'],
+  IN_PROGRESS: ['OPEN', 'DONE', 'CANCELLED'],
+  DONE: ['IN_PROGRESS'],
+  CANCELLED: ['OPEN'],
+};
+
+/** Setting the same status again is a harmless no-op, not an error. */
+export const canTransitionTask = (from: TaskStatus, to: TaskStatus) =>
+  from === to || TASK_TRANSITIONS[from].includes(to);
+
+/** Statuses an employee may set. Completing or cancelling needs a lead or manager (spec 4.2 review). */
+export const EMPLOYEE_TASK_STATUSES: readonly TaskStatus[] = ['OPEN', 'IN_PROGRESS'];
 
 /** Roles holding a permission; endpoint role lists derive from the matrix instead of repeating it. */
 export const rolesWith = (permission: Permission): Role[] =>
