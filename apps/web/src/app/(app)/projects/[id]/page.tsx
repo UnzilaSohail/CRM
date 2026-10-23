@@ -1,85 +1,79 @@
 import { notFound } from 'next/navigation';
+import { AlertTriangle, Gauge, Target } from 'lucide-react';
+import { AccessDenied, LoadError } from '@/components/access-denied';
 import { Badge, Card, KpiCard, PageHeader, Progress, statusTone } from '@/components/ui';
-import { Gauge, Target, AlertTriangle } from 'lucide-react';
-import { customerName, milestoneStatusOf, projectKpi, projects, tasks } from '@/lib/data';
+import { apiGet } from '@/lib/api';
+import { riskLabel } from '@/lib/risk';
+import type { ProjectDetail } from '@/lib/types';
 
-export default async function ProjectDetail({ params }: { params: Promise<{ id: string }> }) {
+const milestoneStatus = (pct: number) =>
+  pct >= 100 ? 'Done' : pct > 0 ? 'In progress' : 'Not started';
+
+export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const p = projects.find((x) => x.id === id);
-  if (!p) notFound();
-  const k = projectKpi(p);
-  const projectTasks = tasks.filter((t) => t.project === p.name);
+  const res = await apiGet<ProjectDetail>(`/projects/${id}`);
+  if (!res.ok) {
+    if ('denied' in res) return <AccessDenied what="this project" />;
+    // The API answers 400/404 for unknown or malformed ids.
+    if (/\((400|404)\)/.test(res.error)) notFound();
+    return <LoadError message={res.error} />;
+  }
+  const p = res.data;
 
   return (
     <>
       <PageHeader
         title={p.name}
-        subtitle={`${customerName(p.customerId)} · Manager ${p.manager} · Due ${p.due}`}
-        actions={<Badge tone={statusTone(p.status)}>{p.status}</Badge>}
+        subtitle={`${p.customer} · Due ${p.due} · Baseline v${p.baselineVersion}`}
+        actions={<Badge tone={statusTone(riskLabel[p.severity])}>{riskLabel[p.severity]}</Badge>}
       />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <KpiCard
           icon={Target}
           label="Planned progress"
-          value={`${k.planned.toFixed(0)}%`}
+          value={`${p.planned.toFixed(0)}%`}
           tone="neutral"
         />
-        <KpiCard icon={Gauge} label="Actual progress" value={`${k.actual.toFixed(0)}%`} />
+        <KpiCard icon={Gauge} label="Actual progress" value={`${p.actual.toFixed(0)}%`} />
         <KpiCard
           icon={AlertTriangle}
           label="Negative deviation"
-          value={`${k.negativeDeviation.toFixed(0)}%`}
-          tone={statusTone(k.severity)}
+          value={`${p.negativeDeviation.toFixed(0)}%`}
+          tone={statusTone(p.severity)}
           hint={
-            k.severity === 'critical'
-              ? 'Critical (≥50%)'
-              : k.severity === 'watch'
+            p.severity === 'critical'
+              ? 'Critical (50% and above)'
+              : p.severity === 'watch'
                 ? 'Watch (25–49%)'
                 : 'Within tolerance'
           }
         />
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      <div className="mt-4">
         <Card title="Milestones (weighted)">
           <ol className="space-y-4">
-            {p.milestones.map((m, i) => (
-              <li key={i}>
-                <div className="mb-1 flex items-center justify-between text-sm">
+            {p.milestones.map((m) => (
+              <li key={m.id}>
+                <div className="mb-1 flex items-center justify-between gap-2 text-sm">
                   <span className="font-medium">
-                    Milestone {i + 1} <span className="text-slate-400">· weight {m.weight}</span>
+                    {m.name} <span className="text-slate-400">· weight {m.weight}</span>
                   </span>
-                  <Badge tone={statusTone(milestoneStatusOf(m.percentComplete))}>
-                    {milestoneStatusOf(m.percentComplete)}
-                  </Badge>
+                  <span className="flex items-center gap-2">
+                    {!m.clientVisible && <Badge>Internal</Badge>}
+                    <Badge tone={statusTone(milestoneStatus(m.percentComplete))}>
+                      {milestoneStatus(m.percentComplete)}
+                    </Badge>
+                  </span>
                 </div>
-                <Progress value={m.percentComplete} label={`Milestone ${i + 1}`} />
+                <Progress value={m.percentComplete} label={m.name} />
                 <p className="mt-1 text-xs text-slate-400">
                   {m.plannedStart} → {m.plannedEnd}
                 </p>
               </li>
             ))}
           </ol>
-        </Card>
-        <Card title="Tasks">
-          {projectTasks.length === 0 ? (
-            <p className="text-sm text-slate-500">No tasks yet.</p>
-          ) : (
-            <ul className="divide-y divide-slate-100 text-sm">
-              {projectTasks.map((t) => (
-                <li key={t.id} className="flex items-center justify-between gap-2 py-2.5">
-                  <span>
-                    {t.title}
-                    <span className="block text-xs text-slate-400">
-                      {t.assignee} · due {t.due}
-                    </span>
-                  </span>
-                  <Badge tone={statusTone(t.priority)}>{t.priority}</Badge>
-                </li>
-              ))}
-            </ul>
-          )}
         </Card>
       </div>
     </>

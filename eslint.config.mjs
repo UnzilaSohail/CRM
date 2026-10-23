@@ -20,6 +20,6 @@ export default tseslint.config(
   { files: ['apps/web/public/sw.js'], languageOptions: { globals: serviceWorkerGlobals } },
   {
     files: ['**/scripts/*.mjs', '**/tests/*.mjs'],
-    languageOptions: { globals: { process: 'readonly', Buffer: 'readonly' } },
+    languageOptions: { globals: { process: 'readonly', Buffer: 'readonly', console: 'readonly' } },
   },
 );

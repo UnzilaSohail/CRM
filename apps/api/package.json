@@ -10,7 +10,8 @@
     "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
-    "test": "pnpm build && vitest run && node --test \"tests/*.test.mjs\""
+    "test": "pnpm build && vitest run && node --test \"tests/*.test.mjs\"",
+    "dev:memory": "node scripts/dev-memory.mjs"
   },
   "dependencies": {
     "@crm/kpi-engine": "workspace:*",

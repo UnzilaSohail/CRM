@@ -94,16 +94,20 @@ After decisions: scaffold the monorepo in this repo (Turborepo, Next.js app, API
 
 Defaults from `docs/decisions/0001-default-decisions.md` are in use until the week-1 decisions are answered.
 
-| Area                                                                                          | State                                                               |
-| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Monorepo, CI, docker-compose                                                                  | Done                                                                |
-| `kpi-engine` (progress, deviation per spec formula, dedupe keys, time zones)                  | Done, tested                                                        |
-| `types` (permission matrix), `validators` (zod)                                               | Done, tested                                                        |
-| Prisma schema, initial migration, RLS + append-only + partial/search indexes                  | Done, verified on in-process Postgres                               |
-| Worker: snapshot builder, deviation engine, notification retries, BullMQ queues               | Logic done and tested; processors not yet attached to the database  |
-| API: deny-by-default roles, projects, portal (separate DTOs), deviations + acknowledge, audit | Done on in-memory data; authorization matrix test (62 cases) passes |
-| Web: UX01-UX16 screens, responsive, PWA manifest, offline page, security headers              | Done on sample data                                                 |
-| Docs: KPI dictionary (draft), ERD, permission matrix, local runbook                           | Done                                                                |
-| Real auth (MFA, invites, sessions), Prisma data access, web-to-API wiring                     | Next                                                                |
-| WebSocket chat, file uploads + scanning, exports, email/push notifications                    | Not started                                                         |
-| Observability, Terraform, load tests (k6), Playwright UAT, axe                                | Not started                                                         |
+| Area                                                                                                                                          | State                                                                      |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Monorepo, CI, lint/format/hooks, docker-compose                                                                                               | Done                                                                       |
+| `kpi-engine` (progress, rollups, rates, deviation per spec formula, dedupe keys, time zones)                                                  | Done, tested                                                               |
+| `types` (permission matrix), `validators` (zod)                                                                                               | Done, tested                                                               |
+| Database: Prisma schema, migrations 0001-0004, RLS, append-only audit/baselines, login lookup policy, seed, in-process test database          | Done, tested through Prisma                                                |
+| Auth: signed sessions, login throttling, TOTP MFA enrolment, deny-by-default role guard                                                       | Done on the API; web login/logout/session cookie done                      |
+| Customers API (search, filters, cursor pagination, duplicate detection, archive) and UI                                                       | Done                                                                       |
+| Projects, client portal (own DTOs, own-customer only), deviations + acknowledgement, audit                                                    | Done on the database                                                       |
+| Worker: snapshot builder, deviation engine, notification retries, BullMQ queues                                                               | Logic done and tested; processors not yet attached to the database         |
+| Web: all UX01-UX16 screens, PWA, security headers; login, customers, projects, deviations, dashboard (projects/alerts) and portal use the API | Done; tasks, My Day, attendance, chat, reports, settings still sample data |
+| Tests: 142 API integration tests, 31 Playwright tests in Chrome, unit tests per package                                                       | Passing                                                                    |
+| Invite and password-reset flows, role switch, field-level cost stripping                                                                      | Not started                                                                |
+| Contacts, tasks and assignments, attendance, time entries, project create/baselines APIs                                                      | Not started                                                                |
+| Snapshot and deviation jobs wired to the database, Redis cache                                                                                | Not started                                                                |
+| WebSocket chat, file uploads + scanning, exports, email/push notifications                                                                    | Not started                                                                |
+| Observability, Terraform, k6, axe                                                                                                             | Not started                                                                |

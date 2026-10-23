@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import clsx from 'clsx';
 import {
   LayoutDashboard,
@@ -19,27 +19,58 @@ import {
   Search,
   Menu,
   X,
-  Globe,
+  LogOut,
 } from 'lucide-react';
 import { useState } from 'react';
+import { can, type Permission, type Role } from '@crm/types';
 
-const nav = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: typeof Users;
+  /** Item is shown when the role holds this permission; omitted means every internal role. */
+  permission?: Permission;
+}
+
+const nav: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/customers', label: 'Customers', icon: Users },
-  { href: '/projects', label: 'Projects', icon: FolderKanban },
-  { href: '/tasks', label: 'Tasks', icon: CheckSquare },
+  { href: '/customers', label: 'Customers', icon: Users, permission: 'customers:read' },
+  { href: '/projects', label: 'Projects', icon: FolderKanban, permission: 'projects:read' },
+  { href: '/tasks', label: 'Tasks', icon: CheckSquare, permission: 'tasks:read' },
   { href: '/my-day', label: 'My Day', icon: Sun },
   { href: '/attendance', label: 'Attendance', icon: Clock },
-  { href: '/kpi', label: 'KPI Scorecard', icon: BarChart3 },
-  { href: '/deviations', label: 'Deviation Center', icon: AlertTriangle },
+  { href: '/kpi', label: 'KPI Scorecard', icon: BarChart3, permission: 'portfolio:read' },
+  {
+    href: '/deviations',
+    label: 'Deviation Center',
+    icon: AlertTriangle,
+    permission: 'deviations:manage',
+  },
   { href: '/chat', label: 'Messages', icon: MessageSquare },
-  { href: '/reports', label: 'Reports', icon: FileText },
-  { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/reports', label: 'Reports', icon: FileText, permission: 'portfolio:read' },
+  { href: '/settings', label: 'Settings', icon: Settings, permission: 'admin:manage' },
 ];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+const roleLabel: Record<Role, string> = {
+  CEO: 'CEO',
+  SUPER_ADMIN: 'Super admin',
+  PROJECT_MANAGER: 'Project manager',
+  TEAM_LEAD: 'Team lead',
+  EMPLOYEE: 'Employee',
+  CUSTOMER: 'Customer',
+};
+
+export function AppShell({ role, children }: { role: Role; children: React.ReactNode }) {
   const path = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const items = nav.filter((i) => !i.permission || can(role, i.permission));
+
+  async function signOut() {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.replace('/login');
+    router.refresh();
+  }
 
   const sidebar = (
     <nav aria-label="Main" className="flex h-full flex-col bg-navy text-slate-200">
@@ -50,7 +81,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         AiNetworks
       </div>
       <ul className="flex-1 space-y-0.5 px-3">
-        {nav.map(({ href, label, icon: Icon }) => {
+        {items.map(({ href, label, icon: Icon }) => {
           const active = path === href || path.startsWith(`${href}/`);
           return (
             <li key={href}>
@@ -69,15 +100,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           );
         })}
       </ul>
-      <Link
-        href="/portal"
-        className="m-3 flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-xs hover:bg-navy-700"
-      >
-        <Globe size={14} aria-hidden /> Preview client portal
-      </Link>
       <div className="border-t border-white/10 p-4 text-sm">
-        <p className="font-medium text-white">Iqbal Butt</p>
-        <p className="text-xs text-slate-400">CEO &amp; Founder</p>
+        <p className="text-xs text-slate-400">Signed in as</p>
+        <p className="mb-2 font-medium text-white">{roleLabel[role]}</p>
+        <button
+          onClick={signOut}
+          className="flex items-center gap-2 text-xs text-slate-300 hover:text-white"
+        >
+          <LogOut size={14} aria-hidden /> Sign out
+        </button>
       </div>
     </nav>
   );
@@ -114,11 +145,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               aria-label="Global search"
             />
           </div>
-          <button className="btn-ghost relative" aria-label="Notifications, 5 unread">
+          <button className="btn-ghost relative" aria-label="Notifications">
             <Bell size={18} />
-            <span className="absolute -right-1 -top-1 rounded-full bg-danger px-1.5 text-[10px] text-white">
-              5
-            </span>
           </button>
         </header>
         <main className="p-4 md:p-6">{children}</main>
